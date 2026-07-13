@@ -4202,6 +4202,10 @@ const lerp = (a,b,t)=>a+(b-a)*t;
 const rand = (a,b)=>a+Math.random()*(b-a);
 const dmp = (cur,tgt,l,dt)=>lerp(cur,tgt,1-Math.exp(-l*dt)); // frame-rate independent damping
 
+// safe storage (sandboxed iframes can throw on localStorage access)
+const LS={ get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
+
 const loadEl = $('#load'), loadErr = $('#loadErr');
 window.addEventListener('error', e=>{
   loadErr.textContent = 'Errore: ' + (e.message||e);
@@ -4260,12 +4264,11 @@ const ENVS = [
 
 /* ---------- persisted settings ---------- */
 const SET = {
-  car: clamp(+(localStorage.getItem('apex_car')||0),0,CARS.length-1),
-  color: +(localStorage.getItem('apex_color')||0),
-  env: clamp(+(localStorage.getItem('apex_env')||0),0,ENVS.length-1),
+  car: clamp(+(LS.get('apex_car',0)),0,CARS.length-1),
+  color: +(LS.get('apex_color',0)),
+  env: clamp(+(LS.get('apex_env',0)),0,ENVS.length-1),
 };
-function saveSet(){ localStorage.setItem('apex_car',SET.car); localStorage.setItem('apex_color',SET.color);
-  localStorage.setItem('apex_env',SET.env); }
+function saveSet(){ LS.set('apex_car',SET.car); LS.set('apex_color',SET.color); LS.set('apex_env',SET.env); }
 function curCar(){ return CARS[SET.car]; }
 function curColor(){ const p=curCar().palette; return p[clamp(SET.color,0,p.length-1)]; }
 function curEnv(){ return ENVS[SET.env]; }
@@ -4951,7 +4954,7 @@ function sfxThunder(){
    ================================================================ */
 const G={
   state:'menu', speed:0, targetSpeed:0, baseSpeed:34, maxSpeed:66, boostSpeed:96,
-  dist:0, score:0, combo:1, comboTimer:0, boost:1.0, boosting:false, best:+(localStorage.getItem('apex_best')||0),
+  dist:0, score:0, combo:1, comboTimer:0, boost:1.0, boosting:false, best:+(LS.get('apex_best',0)),
   maxKmh:0, spawnT:0, orbT:0, shake:0, slowmo:1, camFov:62,
   integrity:100, iframes:0, shieldTime:0, tier:1, bounce:0,
   carTop:1, carAccel:1, carGrip:1, flash:0, lightning:0, lightT:6
@@ -5064,7 +5067,7 @@ function crash(){
   const kmh=Math.round(G.maxKmh);
   const best=Math.max(G.best, Math.round(G.score));
   const isBest=Math.round(G.score)>G.best;
-  G.best=best; localStorage.setItem('apex_best',best);
+  G.best=best; LS.set('apex_best',best);
   setTimeout(()=>{
     $('#fScore').textContent=Math.round(G.score).toLocaleString();
     $('#fDist').textContent=Math.round(G.dist).toLocaleString();
