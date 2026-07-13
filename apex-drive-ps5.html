@@ -223,6 +223,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
       </div>
       <button class="navbtn" id="carNext">►</button>
     </div>
+    <div class="selrow"><div class="sellabel">LUOGO</div><div class="envsel" id="locSel"></div></div>
     <div class="selrow"><div class="sellabel">MODALITÀ</div><div class="envsel" id="modeSel"></div></div>
     <div class="selrow"><div class="sellabel">AMBIENTE</div><div class="envsel" id="envSel"></div></div>
   </div>
@@ -4165,9 +4166,28 @@ const ENVS=[
   {id:'neon',name:'NEON', sky:[0x0a0226,0x2a0a56,0xff2a8c,0x14e0ff], glow:0.85, fog:0x100630, fogD:0.0034,
     sun:{c:0xff6ad0,i:0.75,p:[0,60,-90]}, hemi:{s:0x6a2aff,g:0x0a0220,i:0.5}, key:0xff9fe0, expo:1.06, bloom:1.05, cloud:0.3, cloudCol:0x5a2a86, star:0.7, win:1.45, lamp:1.0},
 ];
+// LUOGHI (locations): each reshapes the terrain + which world content is built + a default sky mood.
+const LOCS=[
+  {id:'city',    name:'CITTÀ',             env:0, ground:0x46592f, sand:false, houseStyle:'city',
+    b:{downtown:1.0, suburb:16, houses:12, palms:26, torii:0, lamps:'full', mtn:26}},
+  {id:'italy',   name:'CITTÀ ITALIANA',    env:2, ground:0x6a7638, sand:false, houseStyle:'italy',
+    b:{downtown:0.5, suburb:8,  houses:34, palms:18, torii:0, lamps:'full', mtn:22}},
+  {id:'anime',   name:'CITTÀ ANIME 🇯🇵',    env:6, ground:0x39492f, sand:false, houseStyle:'anime',
+    b:{downtown:1.2, suburb:14, houses:16, palms:14, torii:5, lamps:'full', mtn:20}},
+  {id:'sea',     name:'MARE',              env:0, ground:0x53632f, sand:true,  houseStyle:'italy',
+    b:{downtown:0,   suburb:4,  houses:10, palms:44, torii:0, lamps:'ring', mtn:18}},
+  {id:'island',  name:'ISOLA DESERTA',     env:0, ground:0xccb579, sand:true,  houseStyle:'desert',
+    b:{downtown:0,   suburb:0,  houses:0,  palms:74, torii:0, lamps:'none', mtn:14}},
+  {id:'mountain',name:'MONTAGNA',          env:1, ground:0x5a6844, sand:false, houseStyle:'chalet',
+    b:{downtown:0,   suburb:6,  houses:22, palms:0,  torii:0, lamps:'ring', mtn:32}},
+  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:2,ground:0x7a8443, sand:true,  houseStyle:'italy', multi:true,
+    b:{downtown:0,   suburb:4,  houses:46, palms:22, torii:0, lamps:'ring', mtn:16}},
+];
 const SET={ car:clamp(+(LS.get('apex_car',0)),0,CARS.length-1), color:+(LS.get('apex_color',0)),
-  env:clamp(+(LS.get('apex_env',0)),0,ENVS.length-1), dynamic:LS.get('apex_dyn','0')==='1' };
-function saveSet(){ LS.set('apex_car',SET.car);LS.set('apex_color',SET.color);LS.set('apex_env',SET.env);LS.set('apex_dyn',SET.dynamic?'1':'0'); }
+  env:clamp(+(LS.get('apex_env',0)),0,ENVS.length-1), dynamic:LS.get('apex_dyn','0')==='1',
+  loc:clamp(+(LS.get('apex_loc',0)),0,LOCS.length-1) };
+function saveSet(){ LS.set('apex_car',SET.car);LS.set('apex_color',SET.color);LS.set('apex_env',SET.env);LS.set('apex_dyn',SET.dynamic?'1':'0');LS.set('apex_loc',SET.loc); }
+function curLoc(){return LOCS[SET.loc];}
 function curCar(){return CARS[SET.car];}
 function curColor(){const p=curCar().palette;return p[clamp(SET.color,0,p.length-1)];}
 function curEnv(){return ENVS[SET.env];}
@@ -4461,6 +4481,8 @@ function buildPalm(){
 const R_LAND=340, GROUND_R=380;
 const buildings=[], colliders=[], coins=[], lampGroup=[];
 let water=null, seaMesh=null, mapRoads=[], mapBuild=[], FACADE_POOL=[];
+let world=null;  // holds all switchable location content (cleared/rebuilt on location change)
+function W(){ if(!world){ world=new THREE.Group(); scene.add(world); } return world; }
 const waterU={ uTime:{value:0} };
 /* moving sea: swell waves displace the vertices and re-derive normals for lighting */
 function applyWater(mat){
@@ -4475,14 +4497,30 @@ function applyWater(mat){
   mat.customProgramCacheKey=()=>'water';
 }
 
-/* rolling terrain: flat downtown core, gentle hills mid-island, flattens to the coast */
-function terrainH(x,z){
-  const r=Math.hypot(x,z);
-  const core=clamp((r-110)/120,0,1);                       // 0 in downtown -> flat
-  const coast=1-clamp((r-(GROUND_R-55))/55,0,1);           // -> 0 at the shoreline
-  const h=Math.sin(x*0.011+0.5)*3.1 + Math.cos(z*0.0102)*3.1 + Math.sin((x*0.6+z)*0.008+1.3)*2.2;
-  return h*core*coast;
-}
+/* per-location terrain profiles — the road/ground/props all conform to terrainH,
+   so raising the ground here is what makes a location "multi-level" (e.g. Amalfi:
+   a high cliff road with the sea far below). */
+const TERR={
+  city(x,z,r){ const core=clamp((r-110)/120,0,1); const coast=1-clamp((r-(GROUND_R-55))/55,0,1);
+    return (Math.sin(x*0.011+0.5)*3.1+Math.cos(z*0.0102)*3.1+Math.sin((x*0.6+z)*0.008+1.3)*2.2)*core*coast; },
+  anime(x,z,r){ return TERR.city(x,z,r); },
+  italy(x,z,r){ const core=clamp((r-80)/120,0,1); const coast=1-clamp((r-(GROUND_R-55))/55,0,1);
+    return (Math.sin(x*0.013+0.4)*6.5+Math.cos(z*0.012)*6.5+Math.sin((x+z)*0.02)*2.6)*core*coast; },
+  sea(x,z,r){ const core=clamp((r-40)/90,0,1); const coast=1-clamp((r-190)/70,0,1);
+    return (Math.sin(x*0.02)*2.2+Math.cos(z*0.021)*2.2)*core*Math.max(0,coast); },
+  island(x,z,r){ const core=clamp((r-30)/120,0,1); const coast=1-clamp((r-(GROUND_R-80))/80,0,1);
+    return (7+Math.sin(x*0.01)*4+Math.cos(z*0.011)*4+Math.sin((x+z)*0.02)*2)*core*coast; },
+  mountain(x,z,r){ const coast=1-clamp((r-(GROUND_R-40))/40,0,1); const ridge=clamp((r-90)/250,0,1);
+    return Math.max(0, ridge*ridge*125 + Math.sin(x*0.02)*Math.cos(z*0.019)*15 + Math.sin((x+z)*0.011)*9)*coast; },
+  amalfi(x,z,r){ const coast=1-clamp((r-(GROUND_R-30))/30,0,1);
+    const t=clamp((x+190)/380,0,1);                    // 0 on the seaward side, 1 inland
+    let h=Math.pow(t,1.4)*135;                          // steep cliff rise -> road sits high
+    h+=Math.sin(x*0.05)*3+Math.sin(z*0.055)*4;          // surface texture
+    h+=Math.max(0,Math.sin(x*0.085))*5;                 // stacked terraces
+    return h*coast; },
+};
+let LOC=LOCS[SET.loc];
+function terrainH(x,z){ const r=Math.hypot(x,z); return (TERR[LOC.id]||TERR.city)(x,z,r); }
 function terrainSlope(x,z,dx,dz){ const d=3; return (terrainH(x+dx*d,z+dz*d)-terrainH(x-dx*d,z-dz*d))/(2*d); }
 function facadeTex(){
   const W=64,H=128; const mc=document.createElement('canvas');mc.width=W;mc.height=H;const mx=mc.getContext('2d');
@@ -4501,18 +4539,27 @@ function addBuilding(x,z,w,h,d){
   const mat=new THREE.MeshStandardMaterial({color:0x2a323c,roughness:0.4,metalness:0.55,map:tex.map,emissive:0xffffff,emissiveMap:tex.emis,emissiveIntensity:curWinEmis,envMapIntensity:1.1});
   const m=new THREE.Mesh(roundedBox(w,h,d,0.1,2),mat); m.position.set(x,terrainH(x,z)+h/2-0.3,z); m.castShadow=true; m.receiveShadow=true;
   m.userData.emisBase=rand(0.7,1.3); m.material.emissiveIntensity=m.userData.emisBase*curWinEmis;
-  scene.add(m); buildings.push(m);
+  W().add(m); buildings.push(m);
   const r=Math.max(w,d)*0.5+1.2; colliders.push({x,z,r}); mapBuild.push({x,z});
 }
-const HOUSE_COL=[0xd98b6b,0xe0c27a,0x7ba7c9,0x9fbf7a,0xcf7f9a,0xe8e0d0,0x8a7fbf];
-function addHouse(x,z){
-  const y=terrainH(x,z); const w=rand(6,9), d=rand(6,9), h=rand(4,6.5);
-  const wall=new THREE.MeshStandardMaterial({color:HOUSE_COL[(Math.random()*HOUSE_COL.length)|0],roughness:0.9,metalness:0});
-  const body=new THREE.Mesh(roundedBox(w,h,d,0.15,2),wall); body.position.set(x,y+h/2,z); body.castShadow=true; body.receiveShadow=true; scene.add(body);
-  const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.78,rand(2.4,3.6),4),
-    new THREE.MeshStandardMaterial({color:0x6a3b30,roughness:0.85})); roof.position.set(x,y+h+1.3,z); roof.rotation.y=Math.PI/4; roof.castShadow=true; scene.add(roof);
+const HOUSE_STYLES={
+  city:  {walls:[0xd98b6b,0xe0c27a,0x7ba7c9,0x9fbf7a,0xcf7f9a,0xe8e0d0,0x8a7fbf], roof:0x6a3b30, kind:'cone'},
+  italy: {walls:[0xe8c98a,0xe0a86a,0xd98b6b,0xefe0c0,0xcf9a6a,0xe6b98a,0xd97a5a], roof:0xb5502e, kind:'cone'},
+  anime: {walls:[0x2a2f3a,0xe8e0d0,0x3a4450,0xd6d0c4,0x4a3038],                   roof:0x1a2028, kind:'hip'},
+  desert:{walls:[0xd8c49a,0xcbb488,0xe0d0a8,0xd0bc90],                            roof:0xbfa878, kind:'flat'},
+  chalet:{walls:[0x8a6a4a,0x9a7a5a,0xb59a6a,0x7a5a3a],                            roof:0x40342a, kind:'cone'},
+};
+function addHouse(x,z,style){
+  const S=HOUSE_STYLES[style]||HOUSE_STYLES.city;
+  const y=terrainH(x,z); const w=rand(6,9), d=rand(6,9), h=rand(4, S.kind==='flat'?7:6.5);
+  const wall=new THREE.MeshStandardMaterial({color:S.walls[(Math.random()*S.walls.length)|0],roughness:0.92,metalness:0});
+  const body=new THREE.Mesh(roundedBox(w,h,d,0.15,2),wall); body.position.set(x,y+h/2,z); body.castShadow=true; body.receiveShadow=true; W().add(body);
+  const roofMat=new THREE.MeshStandardMaterial({color:S.roof,roughness:0.85});
+  if(S.kind==='flat'){ const roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.4,0.5,d+0.4),roofMat); roof.position.set(x,y+h+0.25,z); roof.castShadow=true; W().add(roof); }
+  else if(S.kind==='hip'){ const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.82,rand(2.0,2.8),4),roofMat); roof.position.set(x,y+h+1.1,z); roof.rotation.y=Math.PI/4; roof.scale.y=0.6; roof.castShadow=true; W().add(roof); }
+  else { const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.78,rand(2.4,3.6),4),roofMat); roof.position.set(x,y+h+1.3,z); roof.rotation.y=Math.PI/4; roof.castShadow=true; W().add(roof); }
   const win=new THREE.MeshStandardMaterial({color:0x2a3644,emissive:0xffd9a0,emissiveMap:null,emissiveIntensity:0.0,roughness:0.4});
-  win.userData=1; const gw=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.2,0.1),win); gw.position.set(x,y+h*0.55,z+d/2+0.02); scene.add(gw);
+  win.userData=1; const gw=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.2,0.1),win); gw.position.set(x,y+h*0.55,z+d/2+0.02); W().add(gw);
   buildings.push(gw); gw.userData.emisBase=rand(0.8,1.4); gw.material.emissiveIntensity=gw.userData.emisBase*curWinEmis;
   const r=Math.max(w,d)*0.5+1.2; colliders.push({x,z,r}); mapBuild.push({x,z});
 }
@@ -4523,7 +4570,7 @@ function addTorii(x,z){   // anime-style gate landmark
   [-4,4].forEach(px=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.85,13,12),red); c.position.set(px,6.5,0); c.castShadow=true; g.add(c); });
   const top=new THREE.Mesh(new THREE.BoxGeometry(13,1.1,1.8),blk); top.position.set(0,12.6,0); top.rotation.z=0.02; g.add(top);
   const top2=new THREE.Mesh(new THREE.BoxGeometry(11,0.8,1.4),red); top2.position.set(0,11.3,0); g.add(top2);
-  scene.add(g); colliders.push({x:x-4,z,r:1.6}); colliders.push({x:x+4,z,r:1.6}); mapBuild.push({x,z});
+  W().add(g); colliders.push({x:x-4,z,r:1.6}); colliders.push({x:x+4,z,r:1.6}); mapBuild.push({x,z});
 }
 /* road surface texture: dark asphalt, yellow solid edges, white dashed lane + centre lines */
 let roadMat=null, ROAD_PERIOD=14;
@@ -4552,7 +4599,7 @@ function ribbonRoad(pts,width){
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
-  const m=new THREE.Mesh(g,getRoadMat()); m.receiveShadow=true; scene.add(m); return m;
+  const m=new THREE.Mesh(g,getRoadMat()); m.receiveShadow=true; W().add(m); return m;
 }
 function roadStrip(x1,z1,x2,z2,wdt){
   const len=Math.hypot(x2-x1,z2-z1), N=Math.max(2,Math.ceil(len/8)), pts=[];
@@ -4568,15 +4615,23 @@ function addLamp(x,z){
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.13,7,6),new THREE.MeshStandardMaterial({color:0x1a2230,roughness:0.6,metalness:0.6}));
   pole.position.y=3.5; g.add(pole);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,10,8),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffb15a,emissiveIntensity:4,roughness:0.4}));
-  head.position.y=7; g.add(head); g.position.set(x,terrainH(x,z),z); scene.add(g); lampGroup.push(g);
+  head.position.y=7; g.add(head); g.position.set(x,terrainH(x,z),z); W().add(g); lampGroup.push(g);
 }
 function addCoin(x,z){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.18,16),new THREE.MeshStandardMaterial({color:0xffd24a,emissive:0xffb020,emissiveIntensity:1.4,metalness:0.8,roughness:0.3}));
-  m.rotation.z=Math.PI/2; m.position.set(x,terrainH(x,z)+1.2,z); m.userData.active=true; scene.add(m); coins.push(m);
+  m.rotation.z=Math.PI/2; m.position.set(x,terrainH(x,z)+1.2,z); m.userData.active=true; W().add(m); coins.push(m);
 }
+// tear down the current location so a new one can be built into a clean world group
+function clearWorld(){
+  if(world){ world.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); while(world.children.length) world.remove(world.children[0]); }
+  buildings.length=0; colliders.length=0; coins.length=0; lampGroup.length=0;
+  mapRoads.length=0; mapBuild.length=0; traffic.length=0;
+  water=null; seaMesh=null; deliveryMarker=null; delivery.active=false;
+}
+function rebuildWorld(){ clearWorld(); buildWorld(); buildTraffic(); buildDelivery(); }
 function buildWorld(){
-  for(let i=0;i<6;i++) FACADE_POOL.push(facadeTex());
-  const HI=CFG.quality==='high';
+  if(FACADE_POOL.length===0) for(let i=0;i<6;i++) FACADE_POOL.push(facadeTex());
+  const HI=CFG.quality==='high'; const L=curLoc(), B=L.b;
   // sea
   const wn=(()=>{const N=256,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');
     x.fillStyle='#8080ff';x.fillRect(0,0,N,N);for(let i=0;i<1400;i++){const b=120+Math.random()*70|0;x.fillStyle=`rgba(${b},${b},255,0.5)`;x.beginPath();x.arc(Math.random()*N,Math.random()*N,1+Math.random()*3,0,7);x.fill();}
@@ -4585,55 +4640,57 @@ function buildWorld(){
   water=new THREE.MeshStandardMaterial({color:0x14607f,metalness:0.6,roughness:0.11,normalMap:wn,normalScale:new THREE.Vector2(0.5,0.5),envMapIntensity:1.0});
   water.userData.n=wn; applyWater(water);
   const sg=new THREE.PlaneGeometry(2800,2800,HI?200:120,HI?200:120); sg.rotateX(-Math.PI/2);
-  seaMesh=new THREE.Mesh(sg,water); seaMesh.position.y=-2.4; scene.add(seaMesh);
-  // grass island (subdivided disc, displaced by the terrain so it rolls)
-  const grass=new THREE.MeshStandardMaterial({color:0x46592f,roughness:1,metalness:0});
+  seaMesh=new THREE.Mesh(sg,water); seaMesh.position.y=-2.4; W().add(seaMesh);
+  // ground disc (subdivided, displaced by the terrain so it rolls / climbs)
+  const grass=new THREE.MeshStandardMaterial({color:L.ground,roughness:1,metalness:0});
   const ig=new THREE.RingGeometry(0.5,GROUND_R,90,HI?54:32); ig.rotateX(-Math.PI/2);
   { const p=ig.attributes.position; for(let i=0;i<p.count;i++){ p.setY(i, terrainH(p.getX(i),p.getZ(i))); } ig.computeVertexNormals(); }
-  const island=new THREE.Mesh(ig,grass); island.position.y=0; island.receiveShadow=true; scene.add(island);
-  // beach ring (flattens to the shoreline)
+  const island=new THREE.Mesh(ig,grass); island.position.y=0; island.receiveShadow=true; W().add(island);
+  // shoreline ring (sand)
   const bg=new THREE.RingGeometry(GROUND_R-16,GROUND_R+2,90,3); bg.rotateX(-Math.PI/2);
   { const p=bg.attributes.position; for(let i=0;i<p.count;i++){ p.setY(i, terrainH(p.getX(i),p.getZ(i))+0.02); } bg.computeVertexNormals(); }
-  const beach=new THREE.Mesh(bg,new THREE.MeshStandardMaterial({color:0xcfc08a,roughness:1})); scene.add(beach);
+  const beach=new THREE.Mesh(bg,new THREE.MeshStandardMaterial({color:0xcfc08a,roughness:1})); W().add(beach);
 
-  // ROADS: inner + outer ring + long boulevards + downtown grid
+  // ROADS: inner + outer ring + long boulevards + downtown grid (shared across locations)
   ringRoad(210,18); ringRoad(300,16);
   roadStrip(0,-330,0,330,18); roadStrip(-330,0,330,0,18);
   const G=[-120,-60,0,60,120];
   for(const gx of G){ roadStrip(gx,-140,gx,140,11); }
   for(const gz of G){ roadStrip(-140,gz,140,gz,11); }
-  // a couple of avenues out to the ring
   roadStrip(0,0,150,150,12); roadStrip(0,0,-150,150,12);
 
-  // DOWNTOWN buildings in the grid blocks
-  for(let i=0;i<G.length-1;i++)for(let j=0;j<G.length-1;j++){
-    const cx=(G[i]+G[i+1])/2, cz=(G[j]+G[j+1])/2;
-    const n=1+((Math.random()*2)|0);
-    for(let k=0;k<n;k++){ const w=rand(8,16),d=rand(8,16),h=rand(16,64);
-      addBuilding(cx+rand(-12,12),cz+rand(-12,12),w,h,d); }
+  // DOWNTOWN towers (only where the location has a downtown)
+  if(B.downtown>0){
+    for(let i=0;i<G.length-1;i++)for(let j=0;j<G.length-1;j++){
+      const cx=(G[i]+G[i+1])/2, cz=(G[j]+G[j+1])/2;
+      const n=Math.max(1,Math.round((1+((Math.random()*2)|0))*B.downtown));
+      for(let k=0;k<n;k++){ const w=rand(8,16),d=rand(8,16),h=rand(16,64)*(0.7+B.downtown*0.3);
+        addBuilding(cx+rand(-12,12),cz+rand(-12,12),w,h,d); }
+    }
   }
-  // scattered suburb buildings out toward the ring
-  for(let i=0;i<(HI?26:16);i++){ const a=rand(0,6.28),r=rand(150,290); const x=Math.cos(a)*r,z=Math.sin(a)*r;
+  // scattered suburb blocks out toward the ring
+  for(let i=0;i<(HI?B.suburb:Math.ceil(B.suburb*0.6));i++){ const a=rand(0,6.28),r=rand(150,290); const x=Math.cos(a)*r,z=Math.sin(a)*r;
     if(Math.abs(r-210)<14) continue; addBuilding(x,z,rand(8,14),rand(10,34),rand(8,14)); }
-  // a residential suburb of little houses (one sector of the outer band)
-  for(let i=0;i<(HI?30:18);i++){ const a=rand(-0.7,1.5), r=rand(150,300); const x=Math.cos(a)*r,z=Math.sin(a)*r;
-    if(Math.abs(r-210)<16) continue; let near=false; for(const c of colliders){ if(Math.hypot(x-c.x,z-c.z)<c.r+5){near=true;break;} } if(near)continue; addHouse(x,z); }
-  // anime torii gate landmarks
-  addTorii(150,150); addTorii(-170,120);
-  // palms + lamps scattered on grass
-  for(let i=0;i<(HI?60:32);i++){ const a=rand(0,6.28),r=rand(40,GROUND_R-24); const x=Math.cos(a)*r,z=Math.sin(a)*r;
+  // residential houses in the location's own style
+  for(let i=0;i<(HI?B.houses:Math.ceil(B.houses*0.6));i++){ const a=rand(0,6.28), r=rand(140,300); const x=Math.cos(a)*r,z=Math.sin(a)*r;
+    if(Math.abs(r-210)<16) continue; let near=false; for(const c of colliders){ if(Math.hypot(x-c.x,z-c.z)<c.r+5){near=true;break;} } if(near)continue; addHouse(x,z,L.houseStyle); }
+  // torii gate landmarks (Japanese city)
+  if(B.torii>0){ const spots=[[150,150],[-170,120],[120,-170],[-140,-150],[190,-40]]; for(let i=0;i<Math.min(B.torii,spots.length);i++) addTorii(spots[i][0],spots[i][1]); }
+  // palms / trees scattered on the ground
+  for(let i=0;i<(HI?B.palms:Math.ceil(B.palms*0.55));i++){ const a=rand(0,6.28),r=rand(40,GROUND_R-24); const x=Math.cos(a)*r,z=Math.sin(a)*r;
     let near=false; for(const c of colliders){ if(Math.hypot(x-c.x,z-c.z)<c.r+2){near=true;break;} } if(near)continue;
-    const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); scene.add(p);
+    const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
-  for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
-  for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); }
+  // street lamps
+  if(B.lamps!=='none'){ for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
+    if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); } }
   // MOUNTAINS backdrop beyond the sea
   const mm=new THREE.MeshStandardMaterial({color:0x4c5b67,roughness:1,flatShading:true});
   const snow=new THREE.MeshStandardMaterial({color:0xe8eff6,roughness:0.9,flatShading:true});
-  for(let i=0;i<26;i++){ const a=i/26*Math.PI*2; const r=rand(560,760); const h=rand(120,320),rad=rand(90,200);
+  for(let i=0;i<B.mtn;i++){ const a=i/B.mtn*Math.PI*2; const r=rand(560,760); const h=rand(120,320),rad=rand(90,200);
     const c=new THREE.Mesh(new THREE.ConeGeometry(rad,h,5+(Math.random()*3|0),1,true),mm);
-    c.position.set(Math.cos(a)*r,h/2-6,Math.sin(a)*r); c.rotation.y=rand(0,6.28); scene.add(c);
-    if(h>170){ const cap=new THREE.Mesh(new THREE.ConeGeometry(rad*0.42,h*0.3,6),snow); cap.position.set(Math.cos(a)*r,h*0.85-6,Math.sin(a)*r); scene.add(cap); }
+    c.position.set(Math.cos(a)*r,h/2-6,Math.sin(a)*r); c.rotation.y=rand(0,6.28); W().add(c);
+    if(h>170){ const cap=new THREE.Mesh(new THREE.ConeGeometry(rad*0.42,h*0.3,6),snow); cap.position.set(Math.cos(a)*r,h*0.85-6,Math.sin(a)*r); W().add(cap); }
   }
   // COINS along the rings and boulevards
   for(let a=0;a<6.28;a+=0.32){ addCoin(Math.cos(a)*210,Math.sin(a)*210); }
@@ -4648,7 +4705,7 @@ function buildTraffic(){
   const HI=CFG.quality==='high'; const N=HI?12:7;
   for(let i=0;i<N;i++){
     const c=buildCar({color:TRAFFIC_COLORS[i%TRAFFIC_COLORS.length], style:['coupe','hyper','muscle','suv'][i%4]});
-    scene.add(c); const e={mesh:c,x:0,z:0};
+    W().add(c); const e={mesh:c,x:0,z:0};
     if(i%3!==0){ e.kind='ring'; e.r=204+(i%2)*14; e.ang=rand(0,6.28); e.spd=rand(15,26)*(Math.random()<0.5?1:-1); }
     else { e.kind='road'; e.axis=Math.random()<0.5?'z':'x'; e.t=rand(-200,200); e.dir=Math.random()<0.5?1:-1; e.spd=rand(15,24); }
     traffic.push(e);
@@ -4674,7 +4731,7 @@ function buildDelivery(){
   const ring=new THREE.Mesh(new THREE.TorusGeometry(4,0.45,12,32),
     new THREE.MeshStandardMaterial({color:0x0a2a2a,emissive:0x2fffe0,emissiveIntensity:2.6,roughness:0.3,metalness:0.4}));
   ring.rotation.x=Math.PI/2; ring.position.y=0.6; g.add(ring); g.userData.ring=ring;
-  deliveryMarker=g; g.visible=false; scene.add(g);
+  deliveryMarker=g; g.visible=false; W().add(g);
 }
 function newDelivery(){
   let x,z;
@@ -4800,8 +4857,9 @@ function update(dt){
     else { if(car.speed>0) car.speed=Math.max(0,car.speed-SPEC.drag*dt); else if(car.speed<0) car.speed=Math.min(0,car.speed+SPEC.drag*dt); }
     car.speed = clamp(car.speed, -SPEC.revMax, top);
     // steering (scaled by speed; reverses when going backwards)
-    const turnFactor = clamp(car.speed/6, -1.1, 1.1);
-    car.yaw += dir * SPEC.turn * turnFactor * dt;
+    // steering: right arrow -> turn right on screen, left -> left (and not inverted in reverse)
+    const turnFactor = clamp(Math.abs(car.speed)/6, 0, 1.1);
+    car.yaw -= dir * SPEC.turn * turnFactor * dt;
     // integrate
     const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
     let nx=car.x+fx*car.speed*dt, nz=car.z+fz*car.speed*dt;
@@ -4853,14 +4911,14 @@ function update(dt){
   // --- camera chase ---
   const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
   const spd01=clamp(Math.abs(car.speed)/SPEC.boost,0,1);
-  const back=9.5+spd01*1.5, hgt=4.2+spd01*0.6;
+  const back=9.5+spd01*0.5, hgt=4.2+spd01*0.35;
   let cx=car.x-fx*back, cz=car.z-fz*back, cyv=terrainH(cx,cz)+hgt;
   if(G.state==='menu'){ cx=Math.sin(performance.now()*0.0002)*10; cz=15; cyv=5; }
   camera.position.x=dmp(camera.position.x,cx,4,dt);
   camera.position.y=dmp(camera.position.y,cyv,4,dt);
   camera.position.z=dmp(camera.position.z,cz,4,dt);
   G.shake=dmp(G.shake,0,5,dt); const sh=G.shake; camera.position.x+=rand(-sh,sh);camera.position.y+=rand(-sh,sh);
-  const tfov=60+spd01*10+(nitroActive?5:0); G.camFov=dmp(G.camFov,tfov,4,dt); camera.fov=G.camFov; camera.updateProjectionMatrix();
+  const tfov=60+spd01*4+(nitroActive?3:0); G.camFov=dmp(G.camFov,tfov,4,dt); camera.fov=G.camFov; camera.updateProjectionMatrix();
   const lookAt = G.state==='menu' ? new THREE.Vector3(0,1,0) : new THREE.Vector3(car.x+fx*8, terrainH(car.x,car.z)+1.5, car.z+fz*8);
   camera.lookAt(lookAt);
 
@@ -4969,7 +5027,25 @@ function changeCar(dir){ SET.car=(SET.car+dir+CARS.length)%CARS.length; SET.colo
 function buildModeChips(){ const box=$('#modeSel'); box.innerHTML='';
   MODES.forEach(m=>{ const d=document.createElement('div'); d.className='envchip'+(m.id===curMode?' sel':''); d.textContent=m.name;
     d.addEventListener('click',()=>{ curMode=m.id; [...box.children].forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); }); box.appendChild(d); }); }
-function applyCarSpec(){ const c=curCar(); SPEC.maxSpeed=42*c.top; SPEC.boost=62*c.top; SPEC.accel=18*c.accel; SPEC.turn=2.3*c.grip; }
+function applyCarSpec(){ const c=curCar();
+  // each car gets its own character: top-speed cars run leaner drag, grippy cars brake/turn harder,
+  // punchy cars accelerate & reverse harder but understeer a touch
+  SPEC.maxSpeed=42*c.top; SPEC.boost=62*c.top; SPEC.accel=18*c.accel;
+  SPEC.turn=2.3*c.grip; SPEC.brakeDecel=24*(0.6+c.grip*0.55); SPEC.drag=7*(1.28-c.top*0.26); SPEC.revMax=12*c.accel; }
+function selectLoc(i){
+  if(i===SET.loc){ return; }
+  SET.loc=clamp(i,0,LOCS.length-1); LOC=LOCS[SET.loc];
+  SET.env=LOC.env; SET.dynamic=false; saveSet();
+  rebuildWorld(); applyEnv(true); buildEnvChips();
+  // reset the car onto solid ground for the new location
+  car.x=0; car.z=100; car.yaw=Math.PI; car.speed=0;
+  const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
+  camera.position.set(car.x-fx*9.5, terrainH(car.x,car.z)+4.4, car.z-fz*9.5); camera.lookAt(car.x,terrainH(car.x,car.z)+1.5,car.z);
+}
+function buildLocChips(){ const box=$('#locSel'); box.innerHTML='';
+  LOCS.forEach((l,i)=>{ const d=document.createElement('div'); d.className='envchip'+(i===SET.loc?' sel':''); d.textContent=l.name;
+    d.addEventListener('click',()=>{ selectLoc(i); [...box.children].forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); }); box.appendChild(d); });
+}
 function buildEnvChips(){ const box=$('#envSel'); box.innerHTML='';
   const sync=()=>{const ch=[...box.children]; ch.forEach((x,j)=>x.classList.toggle('sel', SET.dynamic?j===ch.length-1:j===SET.env));};
   ENVS.forEach((e,i)=>{const d=document.createElement('div');d.className='envchip';d.textContent=e.name;
@@ -4996,9 +5072,11 @@ document.querySelectorAll('#qOpts .opt').forEach(o=>o.addEventListener('click',(
 document.querySelectorAll('#qOpts .opt').forEach(o=>o.classList.toggle('sel',o.dataset.q===CFG.quality));
 
 /* ================= BOOT ================= */
+try{ window.__dbg=function(){ return {state:G.state,yaw:car.yaw,speed:car.speed,x:car.x,z:car.z,loc:LOC.id,camy:camera?camera.position.y:0}; }; }catch(e){}
 function boot(){ try{
   if(IS_MOBILE) document.body.classList.add('mobile');
-  initEngine(); buildWorld(); buildTraffic(); buildDelivery(); applyCarSpec(); buildPlayerCar(); applyEnv(false); buildEnvChips(); buildModeChips(); refreshGarage();
+  LOC=LOCS[SET.loc]; SET.env=clamp(SET.env,0,ENVS.length-1);
+  initEngine(); buildWorld(); buildTraffic(); buildDelivery(); applyCarSpec(); buildPlayerCar(); applyEnv(false); buildLocChips(); buildEnvChips(); buildModeChips(); refreshGarage();
   clock.start(); animate(); loadEl.classList.add('hide'); setTimeout(()=>loadEl.remove(),600);
 }catch(err){ console.error(err); loadErr.textContent='Impossibile inizializzare: '+err.message; } }
 boot();
