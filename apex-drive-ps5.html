@@ -4284,6 +4284,31 @@ function curColor(){ const p=curCar().palette; return p[clamp(SET.color,0,p.leng
 function curEnv(){ return ENVS[SET.env]; }
 
 /* ================================================================
+   TERRAIN — rolling hills (salite / discese)
+   Height is a function of distance-along-track s = dist - worldZ, so a
+   physical point keeps its elevation as it scrolls toward the camera.
+   The same formula runs in GLSL (road surfaces) and JS (objects/camera).
+   ================================================================ */
+const HILL = { a1:6.0, f1:2*Math.PI/380, a2:2.4, f2:2*Math.PI/165, ph2:2.1 };
+function hillH(s){ return HILL.a1*Math.sin(s*HILL.f1) + HILL.a2*Math.sin(s*HILL.f2+HILL.ph2); }
+// slope dHeight/dWorldZ at a point (for pitching cars to the road)
+function hillSlopeZ(worldZ, dist){ const d=2.5;
+  return (hillH(dist-(worldZ-d)) - hillH(dist-(worldZ+d)))/(2*d); }
+const hillU = { uDist:{ value:0 } };
+function applyHill(mat){
+  mat.onBeforeCompile = (sh)=>{
+    sh.uniforms.uDist = hillU.uDist;
+    sh.vertexShader = 'uniform float uDist;\nfloat _hillH(float s){ return '
+      +HILL.a1.toFixed(3)+'*sin(s*'+HILL.f1.toFixed(6)+')+'
+      +HILL.a2.toFixed(3)+'*sin(s*'+HILL.f2.toFixed(6)+'+'+HILL.ph2.toFixed(3)+'); }\n'
+      + sh.vertexShader;
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n float _wz=(modelMatrix*vec4(position,1.0)).z;\n transformed.y += _hillH(uDist - _wz);');
+  };
+  mat.customProgramCacheKey = ()=>'hill';
+}
+
+/* ================================================================
    RENDERER / SCENE / CAMERA / POST
    ================================================================ */
 let renderer, scene, camera, composer, bloomPass, fxPass, envRT, MAXANISO=1;
@@ -4578,43 +4603,46 @@ function buildRoad(){
   const rTex = asphaltRough();
   rTex.wrapS=rTex.wrapT=THREE.RepeatWrapping; rTex.repeat.set(4,70); rTex.anisotropy=MAXANISO;
 
+  // helper: long surface geometry laid flat in XZ (mesh stays unrotated so
+  // the hill shader can displace world-Y), extending far ahead of the camera
+  const flatGeo=(w,len,wseg,lseg)=>{ const gg=new THREE.PlaneGeometry(w,len,wseg,lseg);
+    gg.rotateX(-Math.PI/2); gg.translate(0,0,-410); return gg; };
+  const longBox=(w,h)=>{ const gg=new THREE.BoxGeometry(w,h,900,1,1,240); gg.translate(0,0,-410); return gg; };
+
   roadMat = new THREE.MeshPhysicalMaterial({
     color:0x14171c, roughness:0.72, metalness:0.0, map:aTex, normalMap:nTex, roughnessMap:rTex,
     normalScale:new THREE.Vector2(0.45,0.45), envMapIntensity:0.7, clearcoat:0.12, clearcoatRoughness:0.5
   });
-  road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 900), roadMat);
-  road.rotation.x=-Math.PI/2; road.position.z=-360; road.receiveShadow=true;
-  scene.add(road);
+  applyHill(roadMat);
+  road = new THREE.Mesh(flatGeo(ROAD_W, 900, 1, 260), roadMat);
+  road.position.y=0; road.receiveShadow=true; scene.add(road);
 
   // painted lane markings (crisp, non-glowing)
   laneTex = laneTexture();
   laneTex.wrapS=laneTex.wrapT=THREE.RepeatWrapping; laneTex.repeat.set(1,70); laneTex.anisotropy=MAXANISO;
   const lm = new THREE.MeshBasicMaterial({ map:laneTex, transparent:true, depthWrite:false });
-  const lane = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 900), lm);
-  lane.rotation.x=-Math.PI/2; lane.position.set(0,0.015,-360);
-  scene.add(lane); road.userData.lane=lane;
+  applyHill(lm);
+  const lane = new THREE.Mesh(flatGeo(ROAD_W, 900, 1, 260), lm);
+  lane.position.set(0,0.015,0); scene.add(lane); road.userData.lane=lane;
 
-  // realistic metal guardrails with periodic reflector posts
-  const railGeo = new THREE.BoxGeometry(0.18, 0.55, 900);
-  const railMat = ()=> new THREE.MeshStandardMaterial({ color:0x9aa3ad, roughness:0.45, metalness:0.8, envMapIntensity:1.0 });
-  curbL=new THREE.Mesh(railGeo, railMat()); curbL.position.set(-ROAD_W/2-0.2, 0.62, -360); curbL.castShadow=true;
-  curbR=new THREE.Mesh(railGeo, railMat()); curbR.position.set(ROAD_W/2+0.2, 0.62, -360); curbR.castShadow=true;
+  // realistic metal guardrails
+  const railMat = ()=>{ const m=new THREE.MeshStandardMaterial({ color:0x9aa3ad, roughness:0.45, metalness:0.8, envMapIntensity:1.0 }); applyHill(m); return m; };
+  curbL=new THREE.Mesh(longBox(0.18,0.55), railMat()); curbL.position.set(-ROAD_W/2-0.2, 0.62, 0); curbL.castShadow=true;
+  curbR=new THREE.Mesh(longBox(0.18,0.55), railMat()); curbR.position.set(ROAD_W/2+0.2, 0.62, 0); curbR.castShadow=true;
   scene.add(curbL); scene.add(curbR);
   // low kerb strip along each edge
-  const kerbGeo=new THREE.BoxGeometry(0.3,0.14,900);
-  const kerbMat=new THREE.MeshStandardMaterial({color:0xb7bcc2, roughness:0.8, metalness:0});
-  [-1,1].forEach(s=>{ const k=new THREE.Mesh(kerbGeo,kerbMat); k.position.set(s*(ROAD_W/2+0.05),0.09,-360); k.receiveShadow=true; scene.add(k); });
+  const kerbMat=new THREE.MeshStandardMaterial({color:0xb7bcc2, roughness:0.8, metalness:0}); applyHill(kerbMat);
+  [-1,1].forEach(s=>{ const k=new THREE.Mesh(longBox(0.3,0.14),kerbMat); k.position.set(s*(ROAD_W/2+0.05),0.09,0); k.receiveShadow=true; scene.add(k); });
 
   // raised concrete sidewalks
-  const swGeo=new THREE.BoxGeometry(6,0.2,900);
-  const swMat=new THREE.MeshStandardMaterial({color:0x9298a0, roughness:0.95, metalness:0, envMapIntensity:0.25});
-  [-1,1].forEach(s=>{ const sw=new THREE.Mesh(swGeo,swMat); sw.position.set(s*(ROAD_W/2+3.2),0.1,-360);
+  const swMat=new THREE.MeshStandardMaterial({color:0x9298a0, roughness:0.95, metalness:0, envMapIntensity:0.25}); applyHill(swMat);
+  [-1,1].forEach(s=>{ const sw=new THREE.Mesh(longBox(6,0.2),swMat); sw.position.set(s*(ROAD_W/2+3.2),0.1,0);
     sw.receiveShadow=true; scene.add(sw); });
 
-  // roadside ground (grass/soil), receives shadow
-  const gm = new THREE.Mesh(new THREE.PlaneGeometry(400,900),
-    new THREE.MeshStandardMaterial({ color:0x3a4a2a, roughness:1, metalness:0 }));
-  gm.rotation.x=-Math.PI/2; gm.position.set(0,-0.02,-360); gm.receiveShadow=true; scene.add(gm);
+  // roadside ground (grass/soil), receives shadow — follows the hills
+  const gMat=new THREE.MeshStandardMaterial({ color:0x3a4a2a, roughness:1, metalness:0 }); applyHill(gMat);
+  const gm = new THREE.Mesh(flatGeo(150,900,1,200), gMat);   // narrower verge so the coast reads
+  gm.position.set(0,-0.04,0); gm.receiveShadow=true; scene.add(gm);
 }
 
 function asphaltTexture(){
@@ -4749,13 +4777,48 @@ function buildCrosswalk(){
   }
   return g;
 }
+
+/* ================================================================
+   SCENERY BACKDROP — sea on both far sides + distant mountain ranges
+   ================================================================ */
+let water=null, mountains=null;
+function waterNormalTex(){
+  const N=256; const c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  x.fillStyle='#8080ff'; x.fillRect(0,0,N,N);
+  for(let i=0;i<1400;i++){ const b=120+Math.random()*70|0, r=1+Math.random()*3;
+    x.fillStyle=`rgba(${b},${b},255,0.5)`; x.beginPath(); x.arc(Math.random()*N,Math.random()*N,r,0,7); x.fill(); }
+  return new THREE.CanvasTexture(c);
+}
+function buildScenery(){
+  // sea (animated water) far out on each side, well clear of the road in X
+  const n=waterNormalTex(); n.wrapS=n.wrapT=THREE.RepeatWrapping; n.repeat.set(30,50); n.anisotropy=MAXANISO;
+  water=new THREE.MeshStandardMaterial({ color:0x1d6a90, metalness:0.55, roughness:0.13,
+    normalMap:n, normalScale:new THREE.Vector2(0.35,0.35), envMapIntensity:1.15 });
+  [-1,1].forEach(s=>{
+    const sea=new THREE.Mesh(new THREE.PlaneGeometry(820,1400), water);
+    sea.rotation.x=-Math.PI/2; sea.position.set(s*490, -9, -450); scene.add(sea);   // just past the coast, below deepest valley
+  });
+  // distant mountains rising behind the coast
+  mountains=new THREE.Group();
+  const mMat=new THREE.MeshStandardMaterial({color:0x4c5b67, roughness:1, metalness:0, flatShading:true});
+  const snow=new THREE.MeshStandardMaterial({color:0xe8eff6, roughness:0.9, metalness:0, flatShading:true});
+  const place=(x,z,h,r)=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(r,h,5+(Math.random()*3|0),1,true), mMat);
+    cone.position.set(x, h/2-9, z); cone.rotation.y=rand(0,6.28); mountains.add(cone);
+    if(h>80){ const cap=new THREE.Mesh(new THREE.ConeGeometry(r*0.44,h*0.32,6), snow);
+      cap.position.set(x, h*0.84-9, z); cap.rotation.y=cone.rotation.y; mountains.add(cap); }
+  };
+  for(let i=0;i<13;i++) place(rand(-260,260), -430-rand(0,120), rand(95,190), rand(50,100));  // range ahead
+  for(let i=0;i<12;i++){ const s=Math.random()<0.5?-1:1; place(s*rand(170,440), -160-rand(0,320), rand(80,160), rand(45,90)); }
+  scene.add(mountains);
+}
 function resetBuilding(m, side, z){
   const h = rand(14,52);
   const w = rand(6,12), d = rand(7,16);
   m.scale.set(w,h,d);
   const x = side*(ROAD_W/2 + rand(6,20) + w/2);
   m.position.set(x, h/2 - 0.1, z);
-  m.userData.side=side;
+  m.userData.side=side; m.userData.baseY = h/2 - 0.1;
   const base = rand(0.7,1.4);
   m.userData.emisBase = base;
   m.material.emissiveIntensity = base*curWinEmis;
@@ -5287,6 +5350,8 @@ function update(dt){
     G.speed = dmp(G.speed, 0, 1.2, dt);
   }
   const scroll = G.speed*sdt;
+  hillU.uDist.value = G.dist;   // drive the terrain shader
+  if(water){ water.normalMap.offset.y += dt*0.04; water.normalMap.offset.x += dt*0.012; }
 
   // ---- steering ----
   if(playing){
@@ -5305,7 +5370,9 @@ function update(dt){
   player.position.x = dmp(player.position.x, playerX, 12, dt);
   player.rotation.z = dmp(player.rotation.z, -steer*0.12 - playerVX*0.006, 8, dt);
   player.rotation.y = dmp(player.rotation.y, -steer*0.10, 8, dt);
-  player.position.y = 0.02 + Math.sin(performance.now()*0.02)*0.004*Math.min(1,G.speed/40);
+  // ride the hills: sit on the terrain and pitch to the slope
+  player.position.y = hillH(G.dist) + 0.02 + Math.sin(performance.now()*0.02)*0.004*Math.min(1,G.speed/40);
+  player.rotation.x = dmp(player.rotation.x, -hillSlopeZ(0,G.dist)*0.9, 6, dt);
   // wheels
   for(const w of player.userData.wheels){
     w.spin.rotation.x = wheelSpin;
@@ -5341,18 +5408,23 @@ function update(dt){
     if(b.position.z > recycleZ){
       resetBuilding(b, b.userData.side, b.position.z - CFG.buildings/2*SEG*2 - rand(0,SEG));
     }
+    b.position.y = (b.userData.baseY||0) + hillH(G.dist - b.position.z);
   }
   for(const l of lamps){
     l.position.z += scroll;
     if(l.position.z > recycleZ) l.position.z -= CFG.lamps*SEG;
+    l.position.y = hillH(G.dist - l.position.z);
   }
   for(const t of palms){
     t.position.z += scroll;
     if(t.position.z > recycleZ) t.position.z -= CFG.palms*SEG*0.8;
+    t.position.y = 0.2 + hillH(G.dist - t.position.z);
   }
   for(const cw of crosswalks){
     cw.position.z += scroll;
     if(cw.position.z > recycleZ) cw.position.z -= CFG.crosswalks*SEG*7;
+    cw.position.y = 0.02 + hillH(G.dist - cw.position.z);
+    cw.rotation.x = hillSlopeZ(cw.position.z, G.dist);
   }
 
   // ---- traffic ----
@@ -5369,6 +5441,8 @@ function update(dt){
     t.position.z += rel;
     // cars sway a little within their lane; trucks hold the line
     if(!t.userData.truck) t.position.x = t.userData.lane + Math.sin(performance.now()*0.001 + t.position.z)*0.15;
+    t.position.y = hillH(G.dist - t.position.z);
+    t.rotation.x = hillSlopeZ(t.position.z, G.dist);
     for(const w of t.userData.wheels) if(w.spin) w.spin.rotation.x += t.userData.speed*dt*0.9;
     // collision -> damage (fatal only at 0 integrity)
     if(playing && Math.abs(t.position.z-PLAYER_Z)<t.userData.colZ && Math.abs(t.position.x-player.position.x)<t.userData.colX){
@@ -5392,7 +5466,7 @@ function update(dt){
     if(!o.userData.active) continue;
     o.position.z += scroll;
     o.rotation.y += dt*2; o.rotation.x += dt*1.3;
-    o.position.y = 1.1 + Math.sin(performance.now()*0.004)*0.15;
+    o.position.y = 1.1 + Math.sin(performance.now()*0.004)*0.15 + hillH(G.dist - o.position.z);
     if(playing && Math.abs(o.position.z-PLAYER_Z)<2.2 && Math.abs(o.position.x-player.position.x)<1.7){
       o.userData.active=false; o.visible=false; sfxChime();
       const k=o.userData.kind;
@@ -5476,8 +5550,9 @@ function updateCamera(dt){
   const spd01 = clamp(G.speed/G.boostSpeed,0,1);
   // chase target follows player x, slight look-ahead based on steer
   const tx = player.position.x*0.45 + steer*0.6;
+  const camGround = hillH(G.dist - 9);   // terrain height under the chase cam
   camera.position.x = dmp(camera.position.x, tx, 6, dt);
-  camera.position.y = dmp(camera.position.y, 3.3 + spd01*0.5, 5, dt);
+  camera.position.y = dmp(camera.position.y, camGround + 3.3 + spd01*0.5, 5, dt);
   camera.position.z = dmp(camera.position.z, 9.2 - spd01*0.8, 5, dt);
   // dynamic FOV for speed sensation
   const tfov = 60 + spd01*10 + (G.boosting?6:0);
@@ -5488,16 +5563,17 @@ function updateCamera(dt){
   const sh=G.shake*0.5;
   camera.position.x += rand(-sh,sh); camera.position.y += rand(-sh,sh);
   const lookX = player.position.x*0.5 + steer*1.2;
-  camera.lookAt(lookX, 1.15, player.position.z-16);
+  const lookY = hillH(G.dist + 16) + 1.15;   // look toward the road ahead over crests
+  camera.lookAt(lookX, lookY, player.position.z-16);
   // headlight aim (dimmed in daylight)
   if(player.userData.spots){
     player.userData.spots.forEach((sp,i)=>{ sp.target.position.set((i?1:-1)*0.6 + steer*6, 0, -34);
       sp.intensity = 6*lampsDim; });
   }
-  // post fx driven by speed / boost — kept subtle so the image stays sharp
-  fxPass.uniforms.aberration.value = dmp(fxPass.uniforms.aberration.value, 0.0002 + spd01*0.0006 + (G.boosting?0.0016:0), 6, dt);
-  fxPass.uniforms.blur.value = dmp(fxPass.uniforms.blur.value, (G.boosting?0.5:0.0)+spd01*0.12, 6, dt);
-  fxPass.uniforms.vignette.value = 1.0 + spd01*0.35;
+  // post fx driven by speed / boost — very light so surroundings stay clear
+  fxPass.uniforms.aberration.value = dmp(fxPass.uniforms.aberration.value, 0.0001 + spd01*0.0003 + (G.boosting?0.0006:0), 6, dt);
+  fxPass.uniforms.blur.value = dmp(fxPass.uniforms.blur.value, (G.boosting?0.14:0.0)+spd01*0.03, 6, dt);
+  fxPass.uniforms.vignette.value = 1.0 + spd01*0.25;
   if(bloomPass) bloomPass.strength = envBloomBase + (G.boosting?0.25:0) + spd01*0.12;
 }
 
@@ -5535,8 +5611,8 @@ function updateHUD(){
   // shield chip
   if(G.shieldTime>0){ H.shieldChip.style.display=''; H.shieldT.textContent=Math.ceil(G.shieldTime); }
   else H.shieldChip.style.display='none';
-  // damage flash (red) blended with boost tint
-  $('#flash').style.opacity = Math.max(G.flash*0.85, G.boosting?0.18:0).toFixed(3);
+  // damage flash (red); only a faint boost tint
+  $('#flash').style.opacity = Math.max(G.flash*0.85, G.boosting?0.07:0).toFixed(3);
   fxPass.uniforms.time.value = performance.now()*0.001;
 }
 
@@ -5632,6 +5708,7 @@ function boot(){
     initEngine();
     buildRoad();
     buildCity();
+    buildScenery();
     buildPlayer();
     buildTraffic();
     buildParticles();
