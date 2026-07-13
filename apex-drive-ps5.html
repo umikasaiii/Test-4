@@ -4220,6 +4220,8 @@ const CFG = {
   get pr(){ return this.quality==='high' ? Math.min(devicePixelRatio,2) : Math.min(devicePixelRatio,2.5); },
   get buildings(){ return this.quality==='high' ? 30 : 22; },
   get lamps(){ return this.quality==='high' ? 26 : 18; },
+  get palms(){ return this.quality==='high' ? 20 : 14; },
+  get crosswalks(){ return 4; },
   get rain(){ return this.quality==='high' ? 1400 : (IS_MOBILE?600:500); },
   get shadow(){ return this.quality==='high' ? 2048 : 1024; },
   get bloom(){ return this.quality==='high'; },
@@ -4253,23 +4255,28 @@ const CARS = [
 
 /* ---------- environments (day / night / weather) ---------- */
 const ENVS = [
-  { id:'dusk',  name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x0a1020, fogD:0.0052,
-    sun:{c:0xffd9b0,i:1.35,p:[-26,44,-30]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.12, bloom:0.62, rain:0, storm:false },
+  { id:'day',   name:'GIORNO',   sky:[0x1f6fd6,0x4f9ae8,0x9fd0f5,0xfff2d0], glow:0.25, fog:0x9fc0e8, fogD:0.0032,
+    sun:{c:0xfff4e0,i:2.3,p:[-10,60,-24]}, hemi:{s:0xcfe6ff,g:0x6a7a5a,i:1.05}, key:0xffffff, expo:1.0, bloom:0.32,
+    rain:0, storm:false, cloud:1.0, cloudCol:0xffffff },
+  { id:'dusk',  name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0052,
+    sun:{c:0xffd9b0,i:1.35,p:[-26,44,-30]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.12, bloom:0.62,
+    rain:0, storm:false, cloud:0.6, cloudCol:0xffb98a },
+  { id:'dawn',  name:'ALBA',     sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0045,
+    sun:{c:0xffe6c8,i:1.5,p:[20,30,-30]}, hemi:{s:0xbfd0ff,g:0x2a1e30,i:0.7}, key:0xffe0d0, expo:1.15, bloom:0.5,
+    rain:0, storm:false, cloud:0.7, cloudCol:0xffd0c0 },
   { id:'night', name:'NOTTE',    sky:[0x03040c,0x0a1230,0x241844,0x3a2fff], glow:0.35, fog:0x05060f, fogD:0.0072,
-    sun:{c:0x8ea0d8,i:0.5,p:[-20,50,-20]}, hemi:{s:0x354a8a,g:0x0a0812,i:0.4}, key:0x9fb0ff, expo:1.02, bloom:0.9, rain:0, storm:false },
-  { id:'dawn',  name:'ALBA',     sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x2a3560, fogD:0.0045,
-    sun:{c:0xffe6c8,i:1.5,p:[20,30,-30]}, hemi:{s:0xbfd0ff,g:0x2a1e30,i:0.7}, key:0xffe0d0, expo:1.15, bloom:0.5, rain:0, storm:false },
-  { id:'day',   name:'GIORNO',   sky:[0x1f6fd6,0x4f9ae8,0x9fd0f5,0xfff2d0], glow:0.25, fog:0x9fc0e8, fogD:0.0034,
-    sun:{c:0xfff4e0,i:2.2,p:[-10,60,-24]}, hemi:{s:0xcfe6ff,g:0x6a7a5a,i:1.0}, key:0xffffff, expo:1.0, bloom:0.32, rain:0, storm:false },
+    sun:{c:0x8ea0d8,i:0.5,p:[-20,50,-20]}, hemi:{s:0x354a8a,g:0x0a0812,i:0.4}, key:0x9fb0ff, expo:1.02, bloom:0.9,
+    rain:0, storm:false, cloud:0.25, cloudCol:0x3a4a6a },
   { id:'storm', name:'TEMPESTA', sky:[0x0a0e18,0x141a26,0x22283a,0x3a4356], glow:0.18, fog:0x0a0e16, fogD:0.012,
-    sun:{c:0x9fb0c8,i:0.4,p:[-16,40,-24]}, hemi:{s:0x3a4a66,g:0x0a0c12,i:0.5}, key:0xafc0e0, expo:0.95, bloom:0.6, rain:1.6, storm:true },
+    sun:{c:0x9fb0c8,i:0.4,p:[-16,40,-24]}, hemi:{s:0x3a4a66,g:0x0a0c12,i:0.5}, key:0xafc0e0, expo:0.95, bloom:0.6,
+    rain:1.6, storm:true, cloud:0.9, cloudCol:0x3a4048 },
 ];
 
 /* ---------- persisted settings ---------- */
 const SET = {
   car: clamp(+(LS.get('apex_car',0)),0,CARS.length-1),
   color: +(LS.get('apex_color',0)),
-  env: clamp(+(LS.get('apex_env',3)),0,ENVS.length-1),   // default: clear day
+  env: clamp(+(LS.get('apex_env',0)),0,ENVS.length-1),   // default: clear day (index 0)
 };
 function saveSet(){ LS.set('apex_car',SET.car); LS.set('apex_color',SET.color); LS.set('apex_env',SET.env); }
 function curCar(){ return CARS[SET.car]; }
@@ -4337,13 +4344,22 @@ function buildSky(){
     glow:   { value: new THREE.Color(e.sky[3]) },
     glowStr:{ value: e.glow },
     starStr:{ value: 0.7 },
+    cloud:  { value: e.cloud ?? 0.0 },
+    cloudCol:{ value: new THREE.Color(0xffffff) },
+    time:   { value: 0.0 },
     flash:  { value: 0.0 }   // lightning
   };
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite:false, fog:false, uniforms:skyU,
     vertexShader:`varying vec3 vp; void main(){ vp=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader:`
-      varying vec3 vp; uniform vec3 top,mid,horizon,glow; uniform float glowStr,starStr,flash;
+      varying vec3 vp; uniform vec3 top,mid,horizon,glow,cloudCol;
+      uniform float glowStr,starStr,flash,cloud,time;
+      float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+        float a=hash(i),b=hash(i+vec2(1,0)),c2=hash(i+vec2(0,1)),d2=hash(i+vec2(1,1));
+        return mix(mix(a,b,f.x),mix(c2,d2,f.x),f.y); }
+      float fbm(vec2 p){ float v=0.,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.02; a*=0.5;} return v; }
       void main(){
         vec3 d=normalize(vp); float h=clamp(d.y*.5+.5,0.,1.);
         vec3 c=mix(horizon,mid,smoothstep(.0,.5,h));
@@ -4351,6 +4367,15 @@ function buildSky(){
         // warm glow low on the horizon toward -z
         float g=pow(clamp(1.-abs(d.y)*3.5,0.,1.),2.)*clamp(-d.z*.5+.5,0.,1.);
         c+=glow*g*glowStr;
+        // volumetric-ish clouds on the sky dome (planar projection, drifting)
+        if(cloud>0.001 && d.y>0.03){
+          vec2 uv = d.xz/(d.y+0.15) * 0.8 + vec2(time*0.006, time*0.002);
+          float n = fbm(uv*1.4);
+          float cover = smoothstep(0.5,0.9,n) * smoothstep(0.04,0.3,d.y);
+          // soft shaded clouds: darker base, bright tops
+          vec3 cc = mix(cloudCol*0.72, cloudCol, smoothstep(0.5,1.0,n));
+          c = mix(c, cc, clamp(cover*cloud,0.,1.));
+        }
         // faint stars up high
         float st=step(.9992, fract(sin(dot(floor(d.xy*260.),vec2(12.9898,78.233)))*43758.5453));
         c+=st*smoothstep(.3,1.,h)*vec3(.8,.85,1.)*starStr;
@@ -4429,6 +4454,8 @@ function applyEnv(rebuildRefl=true){
   skyU.horizon.value.setHex(e.sky[2]); skyU.glow.value.setHex(e.sky[3]);
   skyU.glowStr.value = e.glow;
   skyU.starStr.value = (e.id==='day') ? 0.0 : (e.id==='dawn'?0.25:0.7);
+  skyU.cloud.value = e.cloud ?? 0.0;
+  skyU.cloudCol.value.setHex(e.cloudCol ?? 0xffffff);
   scene.background.setHex(e.sky[1]);
   scene.fog.color.setHex(e.fog); scene.fog.density = e.fogD;
   sun.color.setHex(e.sun.c); sun.intensity = e.sun.i; sun.position.set(...e.sun.p);
@@ -4575,13 +4602,19 @@ function buildRoad(){
   scene.add(curbL); scene.add(curbR);
   // low kerb strip along each edge
   const kerbGeo=new THREE.BoxGeometry(0.3,0.14,900);
-  const kerbMat=new THREE.MeshStandardMaterial({color:0x2a2e34, roughness:0.85, metalness:0});
-  [-1,1].forEach(s=>{ const k=new THREE.Mesh(kerbGeo,kerbMat); k.position.set(s*(ROAD_W/2-0.1),0.07,-360); k.receiveShadow=true; scene.add(k); });
+  const kerbMat=new THREE.MeshStandardMaterial({color:0xb7bcc2, roughness:0.8, metalness:0});
+  [-1,1].forEach(s=>{ const k=new THREE.Mesh(kerbGeo,kerbMat); k.position.set(s*(ROAD_W/2+0.05),0.09,-360); k.receiveShadow=true; scene.add(k); });
 
-  // roadside ground (dark tarmac / soil), receives shadow
+  // raised concrete sidewalks
+  const swGeo=new THREE.BoxGeometry(6,0.2,900);
+  const swMat=new THREE.MeshStandardMaterial({color:0x9298a0, roughness:0.95, metalness:0, envMapIntensity:0.25});
+  [-1,1].forEach(s=>{ const sw=new THREE.Mesh(swGeo,swMat); sw.position.set(s*(ROAD_W/2+3.2),0.1,-360);
+    sw.receiveShadow=true; scene.add(sw); });
+
+  // roadside ground (grass/soil), receives shadow
   const gm = new THREE.Mesh(new THREE.PlaneGeometry(400,900),
-    new THREE.MeshStandardMaterial({ color:0x1b1e18, roughness:1, metalness:0 }));
-  gm.rotation.x=-Math.PI/2; gm.position.set(0,-0.04,-360); gm.receiveShadow=true; scene.add(gm);
+    new THREE.MeshStandardMaterial({ color:0x3a4a2a, roughness:1, metalness:0 }));
+  gm.rotation.x=-Math.PI/2; gm.position.set(0,-0.02,-360); gm.receiveShadow=true; scene.add(gm);
 }
 
 function asphaltTexture(){
@@ -4667,6 +4700,54 @@ function buildCity(){
     g.userData.side=side;
     scene.add(g); lamps.push(g);
   }
+  // palm trees lining the road
+  for(let i=0;i<CFG.palms;i++){
+    const side=i%2?1:-1;
+    const t=buildPalm();
+    t.position.set(side*(ROAD_W/2+3.2), 0.2, FAR + (i>>1)*SEG*1.6 + (side>0?SEG*0.8:0));
+    t.rotation.y=rand(0,6.28);
+    scene.add(t); palms.push(t);
+  }
+  // zebra crosswalks recycled down the road
+  for(let i=0;i<CFG.crosswalks;i++){
+    const cw=buildCrosswalk();
+    cw.position.set(0,0.02, FAR + i*SEG*7);
+    scene.add(cw); crosswalks.push(cw);
+  }
+}
+const palms=[], crosswalks=[];
+function buildPalm(){
+  const g=new THREE.Group();
+  const trunkMat=new THREE.MeshStandardMaterial({color:0x7a6242, roughness:0.9, metalness:0});
+  const h=rand(5.5,7.5);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.26,h,7), trunkMat);
+  trunk.position.y=h/2; trunk.castShadow=true; trunk.rotation.z=rand(-0.06,0.06); g.add(trunk);
+  const frondMat=new THREE.MeshStandardMaterial({color:0x2f7d3a, roughness:0.75, metalness:0, side:THREE.DoubleSide});
+  const nf=9;
+  for(let i=0;i<nf;i++){
+    const a=i/nf*Math.PI*2;
+    const f=new THREE.Mesh(new THREE.PlaneGeometry(0.55,2.8), frondMat);
+    f.position.set(Math.cos(a)*0.35, h+0.1, Math.sin(a)*0.35);
+    f.rotation.order='YXZ'; f.rotation.y=-a+Math.PI/2; f.rotation.x=-1.15;
+    f.castShadow=true; g.add(f);
+  }
+  // coconut cluster
+  const co=new THREE.Mesh(new THREE.SphereGeometry(0.35,8,6),
+    new THREE.MeshStandardMaterial({color:0x5a4a2a, roughness:0.9}));
+  co.position.y=h; g.add(co);
+  return g;
+}
+function buildCrosswalk(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshBasicMaterial({color:0xe8ebee});
+  const bars=8, bw=ROAD_W/(bars*1.6);
+  for(let i=0;i<bars;i++){
+    const b=new THREE.Mesh(new THREE.PlaneGeometry(bw,3.2), mat);
+    b.rotation.x=-Math.PI/2;
+    b.position.set(-ROAD_W/2 + bw*0.8 + i*(ROAD_W/bars), 0, 0);
+    g.add(b);
+  }
+  return g;
 }
 function resetBuilding(m, side, z){
   const h = rand(14,52);
@@ -4696,9 +4777,8 @@ function buildCar(opt={}){
   const g = new THREE.Group();
   const col = opt.color ?? 0xff5a1e;
   const paint = new THREE.MeshPhysicalMaterial({
-    color: col, metalness:0.9, roughness:0.28,
-    clearcoat:1.0, clearcoatRoughness:0.08, envMapIntensity:1.6,
-    sheen:0.4, sheenColor:new THREE.Color(col)
+    color: col, metalness:0.85, roughness:0.32,
+    clearcoat:1.0, clearcoatRoughness:0.12, envMapIntensity:1.25
   });
   const glass = new THREE.MeshPhysicalMaterial({
     color:0x05080c, metalness:0.1, roughness:0.06, transmission:0.0,
@@ -5222,6 +5302,14 @@ function update(dt){
     l.position.z += scroll;
     if(l.position.z > recycleZ) l.position.z -= CFG.lamps*SEG;
   }
+  for(const t of palms){
+    t.position.z += scroll;
+    if(t.position.z > recycleZ) t.position.z -= CFG.palms*SEG*0.8;
+  }
+  for(const cw of crosswalks){
+    cw.position.z += scroll;
+    if(cw.position.z > recycleZ) cw.position.z -= CFG.crosswalks*SEG*7;
+  }
 
   // ---- traffic ----
   if(playing){
@@ -5279,7 +5367,7 @@ function update(dt){
     if(G.lightT<=0){ G.lightning=1; G.lightT=rand(6,16); sfxThunder(); }
   }
   G.lightning = dmp(G.lightning, 0, 9, dt);
-  if(skyU) skyU.flash.value = G.lightning*0.45;
+  if(skyU){ skyU.flash.value = G.lightning*0.45; skyU.time.value = performance.now()*0.001; }
   renderer.toneMappingExposure = env.expo + G.lightning*0.22;
 
   updateParticles(dt, sdt, scroll);
