@@ -71,13 +71,13 @@ canvas{display:block;width:100%;height:100%}
   border-radius:50%;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);font-weight:800;letter-spacing:.06em;color:var(--text);transition:transform .06s,background .1s}
 .tbtn:active,.tbtn.down{transform:scale(.92);background:rgba(47,182,255,.28)}
-.tbtn.left{left:calc(20px + env(safe-area-inset-left));bottom:calc(120px + env(safe-area-inset-bottom));width:78px;height:78px;font-size:30px}
-.tbtn.right{left:calc(114px + env(safe-area-inset-left));bottom:calc(120px + env(safe-area-inset-bottom));width:78px;height:78px;font-size:30px}
-.tbtn.nitro{right:calc(20px + env(safe-area-inset-right));bottom:calc(230px + env(safe-area-inset-bottom));width:92px;height:92px;
-  font-size:13px;background:linear-gradient(160deg,rgba(47,182,255,.35),rgba(10,16,26,.55));border-color:rgba(94,240,255,.5)}
-.tbtn.nitro.down{background:linear-gradient(160deg,rgba(94,240,255,.6),rgba(47,182,255,.4))}
-.tbtn.brake{right:calc(124px + env(safe-area-inset-right));bottom:calc(120px + env(safe-area-inset-bottom));width:78px;height:78px;
-  font-size:12px;background:linear-gradient(160deg,rgba(255,77,148,.3),rgba(10,16,26,.55));border-color:rgba(255,77,148,.5)}
+.tbtn.left{left:calc(16px + env(safe-area-inset-left));bottom:calc(98px + env(safe-area-inset-bottom));width:86px;height:86px;font-size:34px}
+.tbtn.right{left:calc(112px + env(safe-area-inset-left));bottom:calc(98px + env(safe-area-inset-bottom));width:86px;height:86px;font-size:34px}
+.tbtn.nitro{right:calc(16px + env(safe-area-inset-right));bottom:calc(190px + env(safe-area-inset-bottom));width:98px;height:98px;
+  font-size:14px;background:linear-gradient(160deg,rgba(47,182,255,.4),rgba(10,16,26,.6));border-color:rgba(94,240,255,.6)}
+.tbtn.nitro.down{background:linear-gradient(160deg,rgba(94,240,255,.7),rgba(47,182,255,.45))}
+.tbtn.brake{right:calc(126px + env(safe-area-inset-right));bottom:calc(198px + env(safe-area-inset-bottom));width:82px;height:82px;
+  font-size:12px;background:linear-gradient(160deg,rgba(255,77,148,.35),rgba(10,16,26,.6));border-color:rgba(255,77,148,.6)}
 
 /* ---------- Overlays ---------- */
 .screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -4216,12 +4216,15 @@ const IS_MOBILE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ||
                   (navigator.maxTouchPoints>1 && innerWidth<1024);
 const CFG = {
   quality: IS_MOBILE ? 'low' : 'high',
-  get pr(){ return this.quality==='high' ? Math.min(devicePixelRatio,2) : Math.min(devicePixelRatio,1.5); },
-  get buildings(){ return this.quality==='high' ? 30 : 20; },
-  get lamps(){ return this.quality==='high' ? 26 : 16; },
-  get rain(){ return this.quality==='high' ? 1400 : (IS_MOBILE?0:500); },
+  // render at full device resolution for crispness (capped so 3x phones stay sane)
+  get pr(){ return this.quality==='high' ? Math.min(devicePixelRatio,2) : Math.min(devicePixelRatio,2.5); },
+  get buildings(){ return this.quality==='high' ? 30 : 22; },
+  get lamps(){ return this.quality==='high' ? 26 : 18; },
+  get rain(){ return this.quality==='high' ? 1400 : (IS_MOBILE?600:500); },
   get shadow(){ return this.quality==='high' ? 2048 : 1024; },
-  get bloom(){ return this.quality==='high'; }
+  get bloom(){ return this.quality==='high'; },
+  // hardware anti-aliasing samples for the post-processing buffer
+  get msaa(){ return this.quality==='high' ? 4 : 2; }
 };
 
 /* ---------- world constants ---------- */
@@ -4266,7 +4269,7 @@ const ENVS = [
 const SET = {
   car: clamp(+(LS.get('apex_car',0)),0,CARS.length-1),
   color: +(LS.get('apex_color',0)),
-  env: clamp(+(LS.get('apex_env',0)),0,ENVS.length-1),
+  env: clamp(+(LS.get('apex_env',3)),0,ENVS.length-1),   // default: clear day
 };
 function saveSet(){ LS.set('apex_car',SET.car); LS.set('apex_color',SET.color); LS.set('apex_env',SET.env); }
 function curCar(){ return CARS[SET.car]; }
@@ -4276,18 +4279,19 @@ function curEnv(){ return ENVS[SET.env]; }
 /* ================================================================
    RENDERER / SCENE / CAMERA / POST
    ================================================================ */
-let renderer, scene, camera, composer, bloomPass, fxPass, envRT;
+let renderer, scene, camera, composer, bloomPass, fxPass, envRT, MAXANISO=1;
 const clock = new THREE.Clock();
 
 function initEngine(){
-  renderer = new THREE.WebGLRenderer({ antialias: CFG.quality==='high', powerPreference:'high-performance', stencil:false });
+  renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'high-performance', stencil:false });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(CFG.pr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  MAXANISO = renderer.capabilities.getMaxAnisotropy();
   $('#app').appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
@@ -4302,11 +4306,18 @@ function initEngine(){
   buildLights();
 
   // ---- post processing ----
-  composer = new EffectComposer(renderer);
+  // multisampled HDR buffer -> real anti-aliasing + smooth tone mapping
+  const dbs = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const rt = new THREE.WebGLRenderTarget(dbs.x, dbs.y, {
+    type: CFG.quality==='high' ? THREE.HalfFloatType : THREE.UnsignedByteType,
+    samples: CFG.msaa, colorSpace: THREE.LinearSRGBColorSpace
+  });
+  composer = new EffectComposer(renderer, rt);
   composer.setPixelRatio(CFG.pr);
   composer.addPass(new RenderPass(scene, camera));
   if(CFG.bloom){
-    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.62, 0.6, 0.88);
+    // subtle, realistic bloom — only genuinely bright sources glow
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.9);
     composer.addPass(bloomPass);
   }
   composer.addPass(new OutputPass());
@@ -4426,15 +4437,20 @@ function applyEnv(rebuildRefl=true){
   horizonFill.color.setHex(e.id==='day'?0xfff2d0:0xff8a4a);
   renderer.toneMappingExposure = e.expo;
   envBloomBase = e.bloom;
+  envBloomBase = e.bloom*0.5;   // subtler, more photographic bloom
   // street lamps + headlights are less useful in daylight
   const day = e.id==='day';
-  lampsDim = day ? 0.25 : 1.0;
-  // wet, mirror-like asphalt when it rains
-  if(roadMat){ const wet=e.rain>0; roadMat.roughness = wet?0.16:0.34; roadMat.clearcoat = wet?0.95:0.6; }
+  lampsDim = day ? 0.2 : 1.0;
+  // wet, mirror-like asphalt when it rains; dry matte asphalt otherwise
+  if(roadMat){ const wet=e.rain>0; roadMat.roughness = wet?0.3:0.72; roadMat.clearcoat = wet?0.7:0.12; }
+  // window glow: bright at night, off in daylight
+  curWinEmis = WIN_EMIS[e.id] ?? 1.0;
+  for(const b of buildings){ b.material.emissiveIntensity = (b.userData.emisBase||1)*curWinEmis; }
   if(rebuildRefl && renderer) buildEnvironment();
   applyRain();
 }
-let envBloomBase = 0.62, lampsDim = 1.0, rainOn = false;
+const WIN_EMIS = { dusk:0.9, night:1.35, dawn:0.5, day:0.1, storm:0.8 };
+let envBloomBase = 0.3, lampsDim = 1.0, rainOn = false, curWinEmis = 0.9;
 function applyRain(){ rainOn = curEnv().rain>0; if(rain) rain.visible = rainOn; }
 
 /* ================================================================
@@ -4443,7 +4459,7 @@ function applyRain(){ rainOn = curEnv().rain>0; if(rain) rain.visible = rainOn; 
 const PostFX = {
   uniforms:{
     tDiffuse:{value:null}, time:{value:0}, aberration:{value:0.0}, vignette:{value:1.0},
-    grain:{value:0.05}, blur:{value:0.0}, resolution:{value:new THREE.Vector2(1,1)}
+    grain:{value:0.015}, blur:{value:0.0}, resolution:{value:new THREE.Vector2(1,1)}
   },
   vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
   fragmentShader:`
@@ -4454,7 +4470,7 @@ const PostFX = {
       vec2 uv=vUv; vec2 c=uv-0.5; float r=length(c);
       // radial speed blur toward center
       vec3 col=vec3(0.); float tot=0.;
-      const int N=6;
+      const int N=4;
       for(int i=0;i<N;i++){
         float t=float(i)/float(N-1);
         vec2 o=c*(-blur*r*t);
@@ -4493,23 +4509,33 @@ function roundedBox(w,h,d,r,s=5){
   g.computeVertexNormals(); return g;
 }
 
-/* procedural window texture for buildings (emissive night facade) */
-function facadeTexture(hue){
-  const c=document.createElement('canvas'); c.width=64; c.height=128;
-  const x=c.getContext('2d');
-  x.fillStyle='#070a12'; x.fillRect(0,0,64,128);
-  for(let j=0;j<24;j++) for(let i=0;i<8;i++){
-    if(Math.random()<0.55){ x.fillStyle='#0a0f18'; }
-    else{
-      const lit=Math.random();
-      const col = lit<0.7 ? `rgba(255,${200+Math.random()*40|0},${120+Math.random()*80|0},${0.5+Math.random()*0.5})`
-                          : `rgba(${120+Math.random()*80|0},${200+Math.random()*55|0},255,${0.5+Math.random()*0.5})`;
-      x.fillStyle=col;
+/* procedural glass-tower facade -> { map, emis }
+   map: concrete mullions + glazed window grid · emis: only the lit windows */
+function facadeTexture(){
+  const W=128,H=256;
+  const mc=document.createElement('canvas'); mc.width=W; mc.height=H; const mx=mc.getContext('2d');
+  const ec=document.createElement('canvas'); ec.width=W; ec.height=H; const ex=ec.getContext('2d');
+  // concrete base with faint vertical banding
+  mx.fillStyle='#20252c'; mx.fillRect(0,0,W,H);
+  for(let i=0;i<W;i+=16){ mx.fillStyle=Math.random()<0.5?'#232830':'#1c2027'; mx.fillRect(i,0,16,H); }
+  ex.fillStyle='#000'; ex.fillRect(0,0,W,H);
+  const cols=8, rows=26, cw=W/cols, ch=H/rows;
+  for(let j=0;j<rows;j++) for(let i=0;i<cols;i++){
+    const gx=i*cw+2, gy=j*ch+2, gw=cw-4, gh=ch-3;
+    if(Math.random()<0.6){ // dark glass — reflects sky, does not emit
+      const g=mx.createLinearGradient(gx,gy,gx,gy+gh);
+      g.addColorStop(0,'#2b3a4a'); g.addColorStop(1,'#18222e'); mx.fillStyle=g; mx.fillRect(gx,gy,gw,gh);
+    } else { // lit interior — emits
+      const col = Math.random()<0.7
+        ? `rgb(255,${205+Math.random()*40|0},${140+Math.random()*70|0})`
+        : `rgb(${170+Math.random()*70|0},${210+Math.random()*45|0},255)`;
+      mx.fillStyle=col; mx.fillRect(gx,gy,gw,gh);
+      ex.fillStyle=col; ex.fillRect(gx,gy,gw,gh);
     }
-    x.fillRect(4+i*7, 4+j*5, 5, 3);
   }
-  const t=new THREE.CanvasTexture(c);
-  t.colorSpace=THREE.SRGBColorSpace; return t;
+  const map=new THREE.CanvasTexture(mc); map.colorSpace=THREE.SRGBColorSpace; map.anisotropy=MAXANISO;
+  const emis=new THREE.CanvasTexture(ec); emis.colorSpace=THREE.SRGBColorSpace; emis.anisotropy=MAXANISO;
+  return { map, emis };
 }
 
 /* ================================================================
@@ -4517,74 +4543,91 @@ function facadeTexture(hue){
    ================================================================ */
 let road, roadMat, laneTex, curbL, curbR;
 function buildRoad(){
-  // asphalt
+  // asphalt (anisotropic filtering keeps it crisp into the distance)
   const aTex = asphaltTexture();
-  aTex.wrapS=aTex.wrapT=THREE.RepeatWrapping; aTex.repeat.set(4,60);
+  aTex.wrapS=aTex.wrapT=THREE.RepeatWrapping; aTex.repeat.set(4,70); aTex.anisotropy=MAXANISO;
   const nTex = asphaltNormal();
-  nTex.wrapS=nTex.wrapT=THREE.RepeatWrapping; nTex.repeat.set(4,60);
+  nTex.wrapS=nTex.wrapT=THREE.RepeatWrapping; nTex.repeat.set(4,70); nTex.anisotropy=MAXANISO;
+  const rTex = asphaltRough();
+  rTex.wrapS=rTex.wrapT=THREE.RepeatWrapping; rTex.repeat.set(4,70); rTex.anisotropy=MAXANISO;
 
   roadMat = new THREE.MeshPhysicalMaterial({
-    color:0x0b0f16, roughness:0.34, metalness:0.0, map:aTex, normalMap:nTex,
-    normalScale:new THREE.Vector2(0.6,0.6), envMapIntensity:1.3, clearcoat:0.6, clearcoatRoughness:0.35
+    color:0x14171c, roughness:0.72, metalness:0.0, map:aTex, normalMap:nTex, roughnessMap:rTex,
+    normalScale:new THREE.Vector2(0.45,0.45), envMapIntensity:0.7, clearcoat:0.12, clearcoatRoughness:0.5
   });
   road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 900), roadMat);
   road.rotation.x=-Math.PI/2; road.position.z=-360; road.receiveShadow=true;
   scene.add(road);
 
-  // lane markings (separate scrolling plane, additive glow)
+  // painted lane markings (crisp, non-glowing)
   laneTex = laneTexture();
-  laneTex.wrapS=laneTex.wrapT=THREE.RepeatWrapping; laneTex.repeat.set(1,60);
+  laneTex.wrapS=laneTex.wrapT=THREE.RepeatWrapping; laneTex.repeat.set(1,70); laneTex.anisotropy=MAXANISO;
   const lm = new THREE.MeshBasicMaterial({ map:laneTex, transparent:true, depthWrite:false });
   const lane = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 900), lm);
-  lane.rotation.x=-Math.PI/2; lane.position.set(0,0.02,-360);
+  lane.rotation.x=-Math.PI/2; lane.position.set(0,0.015,-360);
   scene.add(lane); road.userData.lane=lane;
 
-  // glowing neon curbs
-  const curbGeo = new THREE.BoxGeometry(0.35, 0.5, 900);
-  const mkCurb=(c)=> new THREE.Mesh(curbGeo, new THREE.MeshStandardMaterial({
-    color:0x101820, emissive:new THREE.Color(c), emissiveIntensity:2.4, roughness:0.4, metalness:0.2 }));
-  curbL=mkCurb(0x2fb6ff); curbL.position.set(-ROAD_W/2, 0.25, -360);
-  curbR=mkCurb(0xff4d94); curbR.position.set(ROAD_W/2, 0.25, -360);
+  // realistic metal guardrails with periodic reflector posts
+  const railGeo = new THREE.BoxGeometry(0.18, 0.55, 900);
+  const railMat = ()=> new THREE.MeshStandardMaterial({ color:0x9aa3ad, roughness:0.45, metalness:0.8, envMapIntensity:1.0 });
+  curbL=new THREE.Mesh(railGeo, railMat()); curbL.position.set(-ROAD_W/2-0.2, 0.62, -360); curbL.castShadow=true;
+  curbR=new THREE.Mesh(railGeo, railMat()); curbR.position.set(ROAD_W/2+0.2, 0.62, -360); curbR.castShadow=true;
   scene.add(curbL); scene.add(curbR);
+  // low kerb strip along each edge
+  const kerbGeo=new THREE.BoxGeometry(0.3,0.14,900);
+  const kerbMat=new THREE.MeshStandardMaterial({color:0x2a2e34, roughness:0.85, metalness:0});
+  [-1,1].forEach(s=>{ const k=new THREE.Mesh(kerbGeo,kerbMat); k.position.set(s*(ROAD_W/2-0.1),0.07,-360); k.receiveShadow=true; scene.add(k); });
 
-  // dark ground plane far beyond road
+  // roadside ground (dark tarmac / soil), receives shadow
   const gm = new THREE.Mesh(new THREE.PlaneGeometry(400,900),
-    new THREE.MeshStandardMaterial({ color:0x05080e, roughness:1, metalness:0 }));
-  gm.rotation.x=-Math.PI/2; gm.position.set(0,-0.05,-360); gm.receiveShadow=true; scene.add(gm);
+    new THREE.MeshStandardMaterial({ color:0x1b1e18, roughness:1, metalness:0 }));
+  gm.rotation.x=-Math.PI/2; gm.position.set(0,-0.04,-360); gm.receiveShadow=true; scene.add(gm);
 }
 
 function asphaltTexture(){
-  const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
-  x.fillStyle='#0b0f16'; x.fillRect(0,0,256,256);
-  for(let i=0;i<9000;i++){
-    const g=20+Math.random()*40|0;
-    x.fillStyle=`rgba(${g},${g+4},${g+10},${Math.random()*0.5})`;
-    x.fillRect(Math.random()*256, Math.random()*256, 1, 1);
+  const N=512; const c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  x.fillStyle='#181b20'; x.fillRect(0,0,N,N);
+  // aggregate grain
+  for(let i=0;i<34000;i++){
+    const g=26+Math.random()*46|0;
+    x.fillStyle=`rgba(${g},${g+3},${g+7},${Math.random()*0.5})`;
+    x.fillRect(Math.random()*N, Math.random()*N, 1, 1);
   }
+  // occasional cracks / patches
+  x.strokeStyle='rgba(10,11,14,0.5)'; x.lineWidth=1;
+  for(let i=0;i<20;i++){ x.beginPath(); let px=Math.random()*N, py=Math.random()*N; x.moveTo(px,py);
+    for(let s=0;s<6;s++){ px+=rand(-30,30); py+=rand(-30,30); x.lineTo(px,py); } x.stroke(); }
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
 function asphaltNormal(){
-  const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
-  x.fillStyle='#8080ff'; x.fillRect(0,0,256,256);
-  for(let i=0;i<4000;i++){
-    const b=110+Math.random()*90|0;
+  const N=512; const c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  x.fillStyle='#8080ff'; x.fillRect(0,0,N,N);
+  for(let i=0;i<9000;i++){
+    const b=118+Math.random()*80|0;
     x.fillStyle=`rgb(${b},${b},255)`;
-    x.fillRect(Math.random()*256,Math.random()*256,2,2);
+    x.fillRect(Math.random()*N,Math.random()*N,2,2);
   }
   return new THREE.CanvasTexture(c);
 }
+function asphaltRough(){
+  const N=256; const c=document.createElement('canvas'); c.width=c.height=N; const x=c.getContext('2d');
+  x.fillStyle='#b8b8b8'; x.fillRect(0,0,N,N);
+  for(let i=0;i<12000;i++){ const g=150+Math.random()*90|0; x.fillStyle=`rgba(${g},${g},${g},${Math.random()*0.6})`;
+    x.fillRect(Math.random()*N,Math.random()*N,1,1); }
+  return new THREE.CanvasTexture(c);
+}
 function laneTexture(){
-  const c=document.createElement('canvas'); c.width=256; c.height=512; const x=c.getContext('2d');
-  x.clearRect(0,0,256,512);
-  const laneX=[ (0.5-4.2/ROAD_W)*256, 128, (0.5+4.2/ROAD_W)*256 ];
-  // dashed center lines
-  x.fillStyle='rgba(255,255,255,0.9)';
+  const W=512,H=1024; const c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+  x.clearRect(0,0,W,H);
+  const laneX=[ (0.5-4.2/ROAD_W)*W, W/2, (0.5+4.2/ROAD_W)*W ];
+  // dashed white lane dividers
+  x.fillStyle='rgba(235,238,240,0.92)';
   for(const lx of [laneX[0], laneX[2]]){
-    for(let y=0;y<512;y+=64){ x.fillRect(lx-4, y, 8, 34); }
+    for(let y=0;y<H;y+=128){ x.fillRect(lx-6, y, 12, 68); }
   }
-  // solid edge lines faint
-  x.fillStyle='rgba(255,210,120,0.55)';
-  x.fillRect(18,0,5,512); x.fillRect(233,0,5,512);
+  // solid edge lines
+  x.fillStyle='rgba(230,215,150,0.7)';
+  x.fillRect(34,0,8,H); x.fillRect(W-42,0,8,H);
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
 
@@ -4598,8 +4641,8 @@ function buildCity(){
     const side = i%2? 1:-1;
     const tex = facadeTexture();
     const mat = new THREE.MeshStandardMaterial({
-      color:0x0c1220, roughness:0.55, metalness:0.35,
-      emissive:0xffffff, emissiveMap:tex, emissiveIntensity:1.0, map:tex, envMapIntensity:0.8
+      color:0x2a323c, roughness:0.4, metalness:0.55,
+      emissive:0xffffff, emissiveMap:tex.emis, emissiveIntensity:1.0, map:tex.map, envMapIntensity:1.2
     });
     const m = new THREE.Mesh(geo, mat);
     m.castShadow=true; m.receiveShadow=true;
@@ -4632,8 +4675,9 @@ function resetBuilding(m, side, z){
   const x = side*(ROAD_W/2 + rand(6,20) + w/2);
   m.position.set(x, h/2 - 0.1, z);
   m.userData.side=side;
-  const hue = Math.random();
-  m.material.emissiveIntensity = rand(0.7,1.5);
+  const base = rand(0.7,1.4);
+  m.userData.emisBase = base;
+  m.material.emissiveIntensity = base*curWinEmis;
 }
 
 /* ================================================================
@@ -5178,8 +5222,6 @@ function update(dt){
     l.position.z += scroll;
     if(l.position.z > recycleZ) l.position.z -= CFG.lamps*SEG;
   }
-  curbL.material.emissiveIntensity = 2 + (G.boosting?1.5:0);
-  curbR.material.emissiveIntensity = 2 + (G.boosting?1.5:0);
 
   // ---- traffic ----
   if(playing){
@@ -5320,11 +5362,11 @@ function updateCamera(dt){
     player.userData.spots.forEach((sp,i)=>{ sp.target.position.set((i?1:-1)*0.6 + steer*6, 0, -34);
       sp.intensity = 6*lampsDim; });
   }
-  // post fx driven by speed / boost
-  fxPass.uniforms.aberration.value = dmp(fxPass.uniforms.aberration.value, 0.0006 + spd01*0.0022 + (G.boosting?0.003:0), 6, dt);
-  fxPass.uniforms.blur.value = dmp(fxPass.uniforms.blur.value, (G.boosting?0.9:0.15)+spd01*0.35, 6, dt);
-  fxPass.uniforms.vignette.value = 1.0 + spd01*0.5;
-  if(bloomPass) bloomPass.strength = envBloomBase + (G.boosting?0.5:0) + spd01*0.25;
+  // post fx driven by speed / boost — kept subtle so the image stays sharp
+  fxPass.uniforms.aberration.value = dmp(fxPass.uniforms.aberration.value, 0.0002 + spd01*0.0006 + (G.boosting?0.0016:0), 6, dt);
+  fxPass.uniforms.blur.value = dmp(fxPass.uniforms.blur.value, (G.boosting?0.5:0.0)+spd01*0.12, 6, dt);
+  fxPass.uniforms.vignette.value = 1.0 + spd01*0.35;
+  if(bloomPass) bloomPass.strength = envBloomBase + (G.boosting?0.25:0) + spd01*0.12;
 }
 
 function updateAudio(){
