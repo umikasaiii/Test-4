@@ -4257,19 +4257,19 @@ const CARS = [
 const ENVS = [
   { id:'day',   name:'GIORNO',   sky:[0x1f6fd6,0x4f9ae8,0x9fd0f5,0xfff2d0], glow:0.25, fog:0x9fc0e8, fogD:0.0032,
     sun:{c:0xfff4e0,i:2.3,p:[-10,60,-24]}, hemi:{s:0xcfe6ff,g:0x6a7a5a,i:1.05}, key:0xffffff, expo:1.0, bloom:0.32,
-    rain:0, storm:false, cloud:1.0, cloudCol:0xffffff },
+    rain:0, storm:false, cloud:1.0, cloudCol:0xffffff, star:0.0, win:0.1, lamp:0.2 },
   { id:'dusk',  name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0052,
     sun:{c:0xffd9b0,i:1.35,p:[-26,44,-30]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.12, bloom:0.62,
-    rain:0, storm:false, cloud:0.6, cloudCol:0xffb98a },
+    rain:0, storm:false, cloud:0.6, cloudCol:0xffb98a, star:0.35, win:0.9, lamp:1.0 },
   { id:'dawn',  name:'ALBA',     sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0045,
     sun:{c:0xffe6c8,i:1.5,p:[20,30,-30]}, hemi:{s:0xbfd0ff,g:0x2a1e30,i:0.7}, key:0xffe0d0, expo:1.15, bloom:0.5,
-    rain:0, storm:false, cloud:0.7, cloudCol:0xffd0c0 },
+    rain:0, storm:false, cloud:0.7, cloudCol:0xffd0c0, star:0.25, win:0.5, lamp:0.8 },
   { id:'night', name:'NOTTE',    sky:[0x03040c,0x0a1230,0x241844,0x3a2fff], glow:0.35, fog:0x05060f, fogD:0.0072,
     sun:{c:0x8ea0d8,i:0.5,p:[-20,50,-20]}, hemi:{s:0x354a8a,g:0x0a0812,i:0.4}, key:0x9fb0ff, expo:1.02, bloom:0.9,
-    rain:0, storm:false, cloud:0.25, cloudCol:0x3a4a6a },
+    rain:0, storm:false, cloud:0.25, cloudCol:0x3a4a6a, star:0.9, win:1.35, lamp:1.0 },
   { id:'storm', name:'TEMPESTA', sky:[0x0a0e18,0x141a26,0x22283a,0x3a4356], glow:0.18, fog:0x0a0e16, fogD:0.012,
     sun:{c:0x9fb0c8,i:0.4,p:[-16,40,-24]}, hemi:{s:0x3a4a66,g:0x0a0c12,i:0.5}, key:0xafc0e0, expo:0.95, bloom:0.6,
-    rain:1.6, storm:true, cloud:0.9, cloudCol:0x3a4048 },
+    rain:1.6, storm:true, cloud:0.9, cloudCol:0x3a4048, star:0.0, win:0.8, lamp:1.0 },
 ];
 
 /* ---------- persisted settings ---------- */
@@ -4277,11 +4277,49 @@ const SET = {
   car: clamp(+(LS.get('apex_car',0)),0,CARS.length-1),
   color: +(LS.get('apex_color',0)),
   env: clamp(+(LS.get('apex_env',0)),0,ENVS.length-1),   // default: clear day (index 0)
+  dynamic: LS.get('apex_dyn','1')==='1',                 // dynamic day/night cycle (default on)
 };
-function saveSet(){ LS.set('apex_car',SET.car); LS.set('apex_color',SET.color); LS.set('apex_env',SET.env); }
+function saveSet(){ LS.set('apex_car',SET.car); LS.set('apex_color',SET.color); LS.set('apex_env',SET.env);
+  LS.set('apex_dyn',SET.dynamic?'1':'0'); }
 function curCar(){ return CARS[SET.car]; }
 function curColor(){ const p=curCar().palette; return p[clamp(SET.color,0,p.length-1)]; }
 function curEnv(){ return ENVS[SET.env]; }
+
+/* ---------- dynamic day/night cycle ---------- */
+const envById = id => ENVS.find(e=>e.id===id);
+// key times of day (0..1): noon -> sunset -> night -> dawn -> noon
+const CYCLE = [ [0.00,'day'],[0.30,'dusk'],[0.48,'night'],[0.84,'dawn'],[1.00,'day'] ];
+const CYCLE_SECONDS = 150;   // one full day/night while driving
+let todClock = 0.05;
+function envLerp(a,b,t){
+  const L=(x,y)=>x+(y-x)*t;
+  const cA=new THREE.Color(), cB=new THREE.Color();
+  const C=(x,y)=>cA.setHex(x).lerp(cB.setHex(y),t).getHex();
+  return { id:'dyn',
+    sky:[C(a.sky[0],b.sky[0]),C(a.sky[1],b.sky[1]),C(a.sky[2],b.sky[2]),C(a.sky[3],b.sky[3])],
+    glow:L(a.glow,b.glow), fog:C(a.fog,b.fog), fogD:L(a.fogD,b.fogD),
+    sun:{c:C(a.sun.c,b.sun.c), i:L(a.sun.i,b.sun.i), p:[L(a.sun.p[0],b.sun.p[0]),L(a.sun.p[1],b.sun.p[1]),L(a.sun.p[2],b.sun.p[2])]},
+    hemi:{s:C(a.hemi.s,b.hemi.s), g:C(a.hemi.g,b.hemi.g), i:L(a.hemi.i,b.hemi.i)},
+    key:C(a.key,b.key), expo:L(a.expo,b.expo), bloom:L(a.bloom,b.bloom),
+    rain:L(a.rain,b.rain), storm:false, cloud:L(a.cloud,b.cloud), cloudCol:C(a.cloudCol,b.cloudCol),
+    star:L(a.star,b.star), win:L(a.win,b.win), lamp:L(a.lamp,b.lamp) };
+}
+function todEnv(tod){
+  tod = ((tod%1)+1)%1;
+  for(let i=0;i<CYCLE.length-1;i++){
+    const [t0,id0]=CYCLE[i], [t1,id1]=CYCLE[i+1];
+    if(tod>=t0 && tod<=t1){ const k=(tod-t0)/(t1-t0||1); return envLerp(envById(id0),envById(id1),k); }
+  }
+  return envById('day');
+}
+let _reflT=0;
+function tickDayCycle(dt){
+  todClock = (todClock + dt/CYCLE_SECONDS) % 1;
+  const e = todEnv(todClock);
+  applyEnv(false, e);
+  _reflT -= dt;
+  if(_reflT<=0){ _reflT=5; if(CFG.quality==='high') buildEnvironment(e); }   // refresh reflections (desktop only)
+}
 
 /* ================================================================
    TERRAIN — rolling hills (salite / discese)
@@ -4291,21 +4329,30 @@ function curEnv(){ return ENVS[SET.env]; }
    ================================================================ */
 const HILL = { a1:6.0, f1:2*Math.PI/380, a2:2.4, f2:2*Math.PI/165, ph2:2.1 };
 function hillH(s){ return HILL.a1*Math.sin(s*HILL.f1) + HILL.a2*Math.sin(s*HILL.f2+HILL.ph2); }
-// slope dHeight/dWorldZ at a point (for pitching cars to the road)
+// slope dHeight/ds at a point (for pitching cars to the road)
 function hillSlopeZ(worldZ, dist){ const d=2.5;
   return (hillH(dist-(worldZ-d)) - hillH(dist-(worldZ+d)))/(2*d); }
+// horizontal road bend (curves): lateral offset of the road centreline vs s
+const BEND = { a1:15.0, f1:2*Math.PI/300, a2:7.0, f2:2*Math.PI/125, ph2:0.7 };
+function bendX(s){ return BEND.a1*Math.sin(s*BEND.f1) + BEND.a2*Math.sin(s*BEND.f2+BEND.ph2); }
+function bendSlopeZ(worldZ, dist){ const d=2.5;
+  return (bendX(dist-(worldZ-d)) - bendX(dist-(worldZ+d)))/(2*d); }
 const hillU = { uDist:{ value:0 } };
 function applyHill(mat){
   mat.onBeforeCompile = (sh)=>{
     sh.uniforms.uDist = hillU.uDist;
-    sh.vertexShader = 'uniform float uDist;\nfloat _hillH(float s){ return '
+    sh.vertexShader = 'uniform float uDist;\n'
+      +'float _hillH(float s){ return '
       +HILL.a1.toFixed(3)+'*sin(s*'+HILL.f1.toFixed(6)+')+'
       +HILL.a2.toFixed(3)+'*sin(s*'+HILL.f2.toFixed(6)+'+'+HILL.ph2.toFixed(3)+'); }\n'
+      +'float _bendX(float s){ return '
+      +BEND.a1.toFixed(3)+'*sin(s*'+BEND.f1.toFixed(6)+')+'
+      +BEND.a2.toFixed(3)+'*sin(s*'+BEND.f2.toFixed(6)+'+'+BEND.ph2.toFixed(3)+'); }\n'
       + sh.vertexShader;
     sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\n float _wz=(modelMatrix*vec4(position,1.0)).z;\n transformed.y += _hillH(uDist - _wz);');
+      '#include <begin_vertex>\n float _wz=(modelMatrix*vec4(position,1.0)).z;\n float _s=uDist - _wz;\n transformed.y += _hillH(_s);\n transformed.x += _bendX(_s);');
   };
-  mat.customProgramCacheKey = ()=>'hill';
+  mat.customProgramCacheKey = ()=>'warp';
 }
 
 /* ================================================================
@@ -4414,9 +4461,8 @@ function buildSky(){
 }
 
 /* ---------- HDR-ish environment for reflections (PMREM), per-env ---------- */
-function buildEnvironment(){
-  const e = curEnv();
-  const bright = e.id==='day' ? 1.0 : e.id==='dawn' ? 0.7 : e.id==='storm' ? 0.4 : e.id==='night' ? 0.5 : 0.6;
+function buildEnvironment(e=curEnv()){
+  const bright = clamp(1.15 - (e.win ?? 0.6)*0.6, 0.35, 1.0);
   const envScene = new THREE.Scene();
   envScene.background = new THREE.Color(e.sky[1]);
   // ground glow
@@ -4473,37 +4519,32 @@ function buildLights(){
 }
 
 /* ---------- apply an environment preset (menu selection / restart) ---------- */
-function applyEnv(rebuildRefl=true){
-  const e = curEnv();
+function applyEnv(rebuildRefl=true, e=curEnv()){
   skyU.top.value.setHex(e.sky[0]); skyU.mid.value.setHex(e.sky[1]);
   skyU.horizon.value.setHex(e.sky[2]); skyU.glow.value.setHex(e.sky[3]);
   skyU.glowStr.value = e.glow;
-  skyU.starStr.value = (e.id==='day') ? 0.0 : (e.id==='dawn'?0.25:0.7);
+  skyU.starStr.value = e.star ?? 0.7;
   skyU.cloud.value = e.cloud ?? 0.0;
   skyU.cloudCol.value.setHex(e.cloudCol ?? 0xffffff);
   scene.background.setHex(e.sky[1]);
   scene.fog.color.setHex(e.fog); scene.fog.density = e.fogD;
-  sun.color.setHex(e.sun.c); sun.intensity = e.sun.i; sun.position.set(...e.sun.p);
+  sun.color.setHex(e.sun.c); sun.intensity = e.sun.i; sun.position.set(e.sun.p[0],e.sun.p[1],e.sun.p[2]);
   hemi.color.setHex(e.hemi.s); hemi.groundColor.setHex(e.hemi.g); hemi.intensity = e.hemi.i;
   carKey.color.setHex(e.key);
-  horizonFill.color.setHex(e.id==='day'?0xfff2d0:0xff8a4a);
+  horizonFill.color.lerpColors(new THREE.Color(0xff8a4a), new THREE.Color(0xfff2d0), clamp((0.2-(e.lamp??1))/0.2,0,1));
   renderer.toneMappingExposure = e.expo;
-  envBloomBase = e.bloom;
   envBloomBase = e.bloom*0.5;   // subtler, more photographic bloom
-  // street lamps + headlights are less useful in daylight
-  const day = e.id==='day';
-  lampsDim = day ? 0.2 : 1.0;
+  lampsDim = e.lamp ?? 1.0;     // street lamps/headlights dim in daylight
   // wet, mirror-like asphalt when it rains; dry matte asphalt otherwise
   if(roadMat){ const wet=e.rain>0; roadMat.roughness = wet?0.3:0.72; roadMat.clearcoat = wet?0.7:0.12; }
   // window glow: bright at night, off in daylight
-  curWinEmis = WIN_EMIS[e.id] ?? 1.0;
+  curWinEmis = e.win ?? 1.0;
   for(const b of buildings){ b.material.emissiveIntensity = (b.userData.emisBase||1)*curWinEmis; }
-  if(rebuildRefl && renderer) buildEnvironment();
-  applyRain();
+  if(rebuildRefl && renderer) buildEnvironment(e);
+  applyRain(e);
 }
-const WIN_EMIS = { dusk:0.9, night:1.35, dawn:0.5, day:0.1, storm:0.8 };
 let envBloomBase = 0.3, lampsDim = 1.0, rainOn = false, curWinEmis = 0.9;
-function applyRain(){ rainOn = curEnv().rain>0; if(rain) rain.visible = rainOn; }
+function applyRain(e=curEnv()){ rainOn = (e.rain||0)>0.4; if(rain) rain.visible = rainOn; }
 
 /* ================================================================
    CUSTOM POST FX  (vignette + chromatic aberration + grain + radial blur)
@@ -4725,7 +4766,7 @@ function buildCity(){
       new THREE.MeshStandardMaterial({color:0x1a2230,roughness:0.6,metalness:0.6}));
     arm.position.set(-side*0.5,6.9,0); g.add(arm);
     g.position.set(side*(ROAD_W/2+1.4), 0, FAR + i*SEG);
-    g.userData.side=side;
+    g.userData.side=side; g.userData.baseX=side*(ROAD_W/2+1.4);
     scene.add(g); lamps.push(g);
   }
   // palm trees lining the road
@@ -4733,7 +4774,7 @@ function buildCity(){
     const side=i%2?1:-1;
     const t=buildPalm();
     t.position.set(side*(ROAD_W/2+3.2), 0.2, FAR + (i>>1)*SEG*1.6 + (side>0?SEG*0.8:0));
-    t.rotation.y=rand(0,6.28);
+    t.rotation.y=rand(0,6.28); t.userData.baseX=side*(ROAD_W/2+3.2);
     scene.add(t); palms.push(t);
   }
   // zebra crosswalks recycled down the road
@@ -4818,7 +4859,7 @@ function resetBuilding(m, side, z){
   m.scale.set(w,h,d);
   const x = side*(ROAD_W/2 + rand(6,20) + w/2);
   m.position.set(x, h/2 - 0.1, z);
-  m.userData.side=side; m.userData.baseY = h/2 - 0.1;
+  m.userData.side=side; m.userData.baseY = h/2 - 0.1; m.userData.baseX = x;
   const base = rand(0.7,1.4);
   m.userData.emisBase = base;
   m.material.emissiveIntensity = base*curWinEmis;
@@ -4977,8 +5018,8 @@ function buildCar(opt={}){
 /* ================================================================
    PLAYER + TRAFFIC
    ================================================================ */
-let player, playerX=0, playerVX=0, steer=0, wheelSpin=0;
-const traffic=[], trucks=[];
+let player, playerX=0, playerVX=0, steer=0, wheelSpin=0, pRelX=0;
+const traffic=[], trucks=[], forks=[];
 let vehicles=[];
 const TRAFFIC_COLORS=[0x2fb6ff,0x1a1d24,0xffffff,0xff4d94,0x5ef0a2,0xffd24a,0x8a2fff];
 const TRAFFIC_STYLES=['coupe','hyper','muscle','suv','coupe'];
@@ -5011,7 +5052,34 @@ function buildTraffic(){
     t.visible=false; t.userData.active=false; t.userData.colX=1.95; t.userData.colZ=5.4; t.userData.dmg=58; t.userData.truck=true;
     scene.add(t); trucks.push(t);
   }
-  vehicles = traffic.concat(trucks);
+  for(let i=0;i<2;i++){
+    const f = buildFork();
+    f.visible=false; f.userData.active=false; f.userData.colX=2.6; f.userData.colZ=6.5; f.userData.dmg=55;
+    f.userData.truck=true; f.userData.lane=0; f.userData.speed=0; f.userData.wheels=[]; f.userData.isFork=true;
+    scene.add(f); forks.push(f);
+  }
+  vehicles = traffic.concat(trucks).concat(forks);
+}
+function buildFork(){
+  const g=new THREE.Group();
+  const concrete=new THREE.MeshStandardMaterial({color:0x9298a0, roughness:0.9, metalness:0});
+  const island=new THREE.Mesh(roundedBox(2.2,0.34,11,0.2,3), concrete); island.position.y=0.17; island.castShadow=true; g.add(island);
+  // reflective bollards down the middle
+  const bollMat=new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffcc33, emissiveIntensity:1.6});
+  for(let z=-4;z<=4;z+=2){ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.95,8), bollMat); b.position.set(0,0.5,z); g.add(b); }
+  // overhead directional sign
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,4,8),
+    new THREE.MeshStandardMaterial({color:0x2a3038, metalness:0.6, roughness:0.5}));
+  post.position.set(0,2,5.2); post.castShadow=true; g.add(post);
+  const board=new THREE.Mesh(new THREE.BoxGeometry(3.4,1.1,0.12),
+    new THREE.MeshStandardMaterial({color:0x156b39, emissive:0x0c3a1e, emissiveIntensity:0.35, roughness:0.6}));
+  board.position.set(0,3.7,5.2); g.add(board);
+  const arrMat=new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:0.5});
+  [-0.85,0.85].forEach(x=>{ const a=new THREE.Mesh(new THREE.ConeGeometry(0.3,0.55,4), arrMat);
+    a.rotation.z = x<0 ? Math.PI/2 : -Math.PI/2; a.position.set(x,3.7,5.28); g.add(a);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.14,0.06), arrMat); bar.position.set(x - (x<0?-0.35:0.35),3.7,5.28); g.add(bar); });
+  g.userData.wheels=[];
+  return g;
 }
 function buildTruck(){
   const g=new THREE.Group();
@@ -5047,6 +5115,13 @@ function spawnTraffic(){
   c.userData.lane = lane;
   c.userData.scored=false;
   c.rotation.y=0;
+}
+function spawnFork(){
+  const f = forks.find(t=>!t.userData.active); if(!f) return;
+  f.userData.active=true; f.visible=true; f.userData.scored=true;   // no near-miss combo
+  f.userData.lane=0; f.userData.speed=0;
+  f.position.set(0, 0, FAR - rand(0,30)); f.rotation.y=0;
+  if(G.state==='playing') toast('BIVIO  ◄ ►', '#ffd24a');
 }
 
 /* ================================================================
@@ -5104,7 +5179,8 @@ function spawnOrb(){
   const kind=pickKind();
   o.userData.active=true; o.userData.kind=kind.k; o.visible=true;
   o.material.emissive.setHex(kind.c); o.material.color.setHex(kind.c).multiplyScalar(0.15);
-  o.position.set(LANES[Math.floor(Math.random()*3)], 1.1, FAR-rand(0,40));
+  const lane=LANES[Math.floor(Math.random()*3)];
+  o.userData.relX=lane; o.position.set(lane, 1.1, FAR-rand(0,40));
 }
 function emitSmoke(x,y,z){
   const {vel,life,n}=smoke.userData, p=smoke.geometry.attributes.position; let c=0;
@@ -5186,7 +5262,7 @@ function sfxThunder(){
 const G={
   state:'menu', speed:0, targetSpeed:0, baseSpeed:34, maxSpeed:66, boostSpeed:96,
   dist:0, score:0, combo:1, comboTimer:0, boost:1.0, boosting:false, best:+(LS.get('apex_best',0)),
-  maxKmh:0, spawnT:0, orbT:0, shake:0, slowmo:1, camFov:62,
+  maxKmh:0, spawnT:0, orbT:0, forkT:8, shake:0, slowmo:1, camFov:62,
   integrity:100, iframes:0, shieldTime:0, tier:1, bounce:0,
   carTop:1, carAccel:1, carGrip:1, flash:0, lightning:0, lightT:6
 };
@@ -5262,7 +5338,7 @@ function startRun(){
   const c = curCar();
   G.carTop=c.top; G.carAccel=c.accel; G.carGrip=c.grip;
   G.state='playing'; G.speed=8; G.targetSpeed=G.baseSpeed; G.dist=0; G.score=0; G.combo=1;
-  G.comboTimer=0; G.boost=1; G.maxKmh=0; G.spawnT=1.2; G.orbT=2; G.shake=0; G.slowmo=1;
+  G.comboTimer=0; G.boost=1; G.maxKmh=0; G.spawnT=1.2; G.orbT=2; G.forkT=8; G.shake=0; G.slowmo=1;
   G.integrity=100; G.iframes=0; G.shieldTime=0; G.tier=1; G.bounce=0; G.flash=0; G.lightT=6;
   playerX=0; playerVX=0; player.visible=true;
   vehicles.forEach(t=>{ t.userData.active=false; t.visible=false; });
@@ -5352,6 +5428,7 @@ function update(dt){
   const scroll = G.speed*sdt;
   hillU.uDist.value = G.dist;   // drive the terrain shader
   if(water){ water.normalMap.offset.y += dt*0.04; water.normalMap.offset.x += dt*0.012; }
+  if(SET.dynamic) tickDayCycle(dt);   // advance the day/night cycle
 
   // ---- steering ----
   if(playing){
@@ -5367,9 +5444,12 @@ function update(dt){
   wheelSpin += G.speed*dt*0.9;
 
   // ---- player transform ----
-  player.position.x = dmp(player.position.x, playerX, 12, dt);
+  // steer in road-relative space, then bend the car onto the curved road
+  pRelX = dmp(pRelX, playerX, 12, dt);
+  const roadYaw = -bendSlopeZ(0, G.dist);
+  player.position.x = pRelX + bendX(G.dist);
   player.rotation.z = dmp(player.rotation.z, -steer*0.12 - playerVX*0.006, 8, dt);
-  player.rotation.y = dmp(player.rotation.y, -steer*0.10, 8, dt);
+  player.rotation.y = dmp(player.rotation.y, -steer*0.10 + roadYaw, 8, dt);
   // ride the hills: sit on the terrain and pitch to the slope
   player.position.y = hillH(G.dist) + 0.02 + Math.sin(performance.now()*0.02)*0.004*Math.min(1,G.speed/40);
   player.rotation.x = dmp(player.rotation.x, -hillSlopeZ(0,G.dist)*0.9, 6, dt);
@@ -5408,23 +5488,25 @@ function update(dt){
     if(b.position.z > recycleZ){
       resetBuilding(b, b.userData.side, b.position.z - CFG.buildings/2*SEG*2 - rand(0,SEG));
     }
-    b.position.y = (b.userData.baseY||0) + hillH(G.dist - b.position.z);
+    { const s=G.dist - b.position.z; b.position.y=(b.userData.baseY||0)+hillH(s); b.position.x=(b.userData.baseX||0)+bendX(s); }
   }
   for(const l of lamps){
     l.position.z += scroll;
     if(l.position.z > recycleZ) l.position.z -= CFG.lamps*SEG;
-    l.position.y = hillH(G.dist - l.position.z);
+    const s=G.dist - l.position.z; l.position.y=hillH(s); l.position.x=(l.userData.baseX||0)+bendX(s);
   }
   for(const t of palms){
     t.position.z += scroll;
     if(t.position.z > recycleZ) t.position.z -= CFG.palms*SEG*0.8;
-    t.position.y = 0.2 + hillH(G.dist - t.position.z);
+    const s=G.dist - t.position.z; t.position.y=0.2+hillH(s); t.position.x=(t.userData.baseX||0)+bendX(s);
   }
   for(const cw of crosswalks){
     cw.position.z += scroll;
     if(cw.position.z > recycleZ) cw.position.z -= CFG.crosswalks*SEG*7;
-    cw.position.y = 0.02 + hillH(G.dist - cw.position.z);
+    const s=G.dist - cw.position.z;
+    cw.position.y = 0.02 + hillH(s); cw.position.x = bendX(s);
     cw.rotation.x = hillSlopeZ(cw.position.z, G.dist);
+    cw.rotation.y = -bendSlopeZ(cw.position.z, G.dist);
   }
 
   // ---- traffic ----
@@ -5433,25 +5515,30 @@ function update(dt){
     const rate = clamp(1.6 - G.dist/4000, 0.55, 1.6);
     if(G.spawnT<=0){ spawnTraffic(); G.spawnT=rate; }
     G.orbT -= dt; if(G.orbT<=0){ spawnOrb(); G.orbT=rand(3,6); }
+    G.forkT -= dt; if(G.forkT<=0){ spawnFork(); G.forkT=rand(16,26); }   // occasional bivio
   }
   for(const t of vehicles){
     if(!t.userData.active) continue;
     // relative motion: player faster -> traffic moves toward camera
     const rel = (G.speed - t.userData.speed)*sdt;
     t.position.z += rel;
-    // cars sway a little within their lane; trucks hold the line
-    if(!t.userData.truck) t.position.x = t.userData.lane + Math.sin(performance.now()*0.001 + t.position.z)*0.15;
-    t.position.y = hillH(G.dist - t.position.z);
+    // lateral position: lane (relative to road centre) + sway, then bent onto the curve
+    const ts = G.dist - t.position.z;
+    const relX = t.userData.lane + (t.userData.truck?0:Math.sin(performance.now()*0.001 + t.position.z)*0.15);
+    t.userData.relX = relX;
+    t.position.x = relX + bendX(ts);
+    t.position.y = hillH(ts);
     t.rotation.x = hillSlopeZ(t.position.z, G.dist);
+    t.rotation.y = -bendSlopeZ(t.position.z, G.dist);
     for(const w of t.userData.wheels) if(w.spin) w.spin.rotation.x += t.userData.speed*dt*0.9;
-    // collision -> damage (fatal only at 0 integrity)
-    if(playing && Math.abs(t.position.z-PLAYER_Z)<t.userData.colZ && Math.abs(t.position.x-player.position.x)<t.userData.colX){
+    // collision -> damage (road-relative X so curves don't matter)
+    if(playing && Math.abs(t.position.z-PLAYER_Z)<t.userData.colZ && Math.abs(relX - pRelX)<t.userData.colX){
       if(G.iframes<=0){ damage(t); t.userData.active=false; t.visible=false; continue; }
     }
     // near-miss scoring (passed the player closely)
     if(playing && !t.userData.scored && t.position.z>PLAYER_Z+2){
       t.userData.scored=true;
-      const near=Math.abs(t.position.x-player.position.x);
+      const near=Math.abs(relX - pRelX);
       if(near<2.6){
         G.combo=Math.min(9,G.combo+1); G.comboTimer=3; G.score+=80*G.combo;
         toast(`SORPASSO x${G.combo}`, near<2.0?'#ff7a2f':'#5ef0ff');
@@ -5466,8 +5553,10 @@ function update(dt){
     if(!o.userData.active) continue;
     o.position.z += scroll;
     o.rotation.y += dt*2; o.rotation.x += dt*1.3;
-    o.position.y = 1.1 + Math.sin(performance.now()*0.004)*0.15 + hillH(G.dist - o.position.z);
-    if(playing && Math.abs(o.position.z-PLAYER_Z)<2.2 && Math.abs(o.position.x-player.position.x)<1.7){
+    const os=G.dist - o.position.z;
+    o.position.y = 1.1 + Math.sin(performance.now()*0.004)*0.15 + hillH(os);
+    o.position.x = (o.userData.relX||0) + bendX(os);
+    if(playing && Math.abs(o.position.z-PLAYER_Z)<2.2 && Math.abs((o.userData.relX||0) - pRelX)<1.7){
       o.userData.active=false; o.visible=false; sfxChime();
       const k=o.userData.kind;
       if(k==='nitro'){ G.boost=Math.min(1,G.boost+0.4); G.score+=200; toast('+NITRO','#2fffe0'); burstSparks(o.position.x,1.1,o.position.z,0x2fffe0); }
@@ -5478,15 +5567,17 @@ function update(dt){
     if(o.position.z>recycleZ){ o.userData.active=false; o.visible=false; }
   }
 
-  // ---- storm lightning ----
-  const env=curEnv();
-  if(env.storm && playing){
-    G.lightT -= dt;
-    if(G.lightT<=0){ G.lightning=1; G.lightT=rand(6,16); sfxThunder(); }
+  // ---- storm lightning (static storm env only; dynamic cycle drives its own sky) ----
+  if(!SET.dynamic){
+    const env=curEnv();
+    if(env.storm && playing){
+      G.lightT -= dt;
+      if(G.lightT<=0){ G.lightning=1; G.lightT=rand(6,16); sfxThunder(); }
+    }
+    G.lightning = dmp(G.lightning, 0, 9, dt);
+    renderer.toneMappingExposure = env.expo + G.lightning*0.22;
   }
-  G.lightning = dmp(G.lightning, 0, 9, dt);
-  if(skyU){ skyU.flash.value = G.lightning*0.45; skyU.time.value = performance.now()*0.001; }
-  renderer.toneMappingExposure = env.expo + G.lightning*0.22;
+  if(skyU){ skyU.flash.value = SET.dynamic?0:G.lightning*0.45; skyU.time.value = performance.now()*0.001; }
 
   updateParticles(dt, sdt, scroll);
   updateCamera(dt);
@@ -5549,7 +5640,8 @@ function updateParticles(dt, sdt, scroll){
 function updateCamera(dt){
   const spd01 = clamp(G.speed/G.boostSpeed,0,1);
   // chase target follows player x, slight look-ahead based on steer
-  const tx = player.position.x*0.45 + steer*0.6;
+  // follow the curved road: road centre under the cam + a little of the player's own offset
+  const tx = bendX(G.dist - 9) + pRelX*0.4 + steer*0.6;
   const camGround = hillH(G.dist - 9);   // terrain height under the chase cam
   camera.position.x = dmp(camera.position.x, tx, 6, dt);
   camera.position.y = dmp(camera.position.y, camGround + 3.3 + spd01*0.5, 5, dt);
@@ -5562,7 +5654,7 @@ function updateCamera(dt){
   G.shake = dmp(G.shake, 0, 4, dt);
   const sh=G.shake*0.5;
   camera.position.x += rand(-sh,sh); camera.position.y += rand(-sh,sh);
-  const lookX = player.position.x*0.5 + steer*1.2;
+  const lookX = bendX(G.dist + 16) + pRelX*0.5 + steer*1.2;   // aim into the corner ahead
   const lookY = hillH(G.dist + 16) + 1.15;   // look toward the road ahead over crests
   camera.lookAt(lookX, lookY, player.position.z-16);
   // headlight aim (dimmed in daylight)
@@ -5670,13 +5762,19 @@ function changeCar(dir){
 }
 function buildEnvChips(){
   const box=$('#envSel'); box.innerHTML='';
+  const sync=()=>{ const chips=[...box.children];
+    chips.forEach((x,j)=>x.classList.toggle('sel', SET.dynamic ? j===chips.length-1 : j===SET.env)); };
   ENVS.forEach((e,i)=>{
-    const d=document.createElement('div'); d.className='envchip'+(i===SET.env?' sel':'');
+    const d=document.createElement('div'); d.className='envchip';
     d.textContent=e.name;
-    d.addEventListener('click',()=>{ SET.env=i; saveSet(); applyEnv(true);
-      document.querySelectorAll('#envSel .envchip').forEach((x,j)=>x.classList.toggle('sel',j===i)); });
+    d.addEventListener('click',()=>{ SET.dynamic=false; SET.env=i; saveSet(); applyEnv(true); sync(); });
     box.appendChild(d);
   });
+  // dynamic day/night cycle option
+  const dyn=document.createElement('div'); dyn.className='envchip'; dyn.textContent='DINAMICO ☀︎☾';
+  dyn.addEventListener('click',()=>{ SET.dynamic=true; saveSet(); todClock=0.02; sync(); });
+  box.appendChild(dyn);
+  sync();
 }
 
 /* ---------- start / retry (persist settings first) ---------- */
