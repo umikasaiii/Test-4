@@ -74,7 +74,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
 /* overlays */
 .screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
   padding:24px;background:radial-gradient(120% 90% at 50% 8%,rgba(9,14,26,.35),rgba(3,5,10,.86) 70%);backdrop-filter:blur(2px);
-  transition:opacity .45s;opacity:1} .screen.hide{opacity:0;pointer-events:none}
+  transition:opacity .45s;opacity:1;overflow-y:auto;-webkit-overflow-scrolling:touch} .screen.hide{opacity:0;pointer-events:none}
 .logo{font-weight:800;font-style:italic;font-size:clamp(44px,12vw,96px);line-height:.9;text-shadow:0 6px 40px rgba(0,0,0,.7)}
 .logo i{color:var(--orange);font-style:italic}
 .logo .sub{display:block;font-size:clamp(12px,3.2vw,18px);font-weight:700;font-style:normal;letter-spacing:.5em;color:var(--cyan);margin-top:12px;padding-left:.5em}
@@ -127,6 +127,20 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
 @keyframes rockit{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(78deg)}}
 @media (orientation:portrait){ body.mobile #rotate{display:flex} }
 
+/* short screens: compact, top-aligned, scrollable menu so GUIDA is always reachable */
+@media (max-height:560px){
+  #menu{justify-content:flex-start;padding:12px 18px 22px}
+  /* show the play buttons right under the title; garage scrolls in below */
+  #menu .logo{order:0;font-size:clamp(26px,6.5vw,44px)} #menu .logo .sub{font-size:10px;margin-top:4px;letter-spacing:.4em}
+  #menu .cta{order:1;margin-top:12px} #menu .garage{order:2;margin-top:14px} #menu .hint{order:3;margin-top:10px}
+  .tagline{display:none}
+  .carinfo{padding:10px 14px} .carname{font-size:20px}
+  .statbars{gap:4px;margin-top:6px} .swatches{margin-top:8px} .swatch{width:24px;height:24px}
+  .selrow{margin-top:10px} .cta{gap:8px} .btn{padding:12px 38px;font-size:15px}
+  .opts{margin-top:2px} .hint{font-size:11px} .navbtn{width:46px;height:46px}
+  .pause .logo{order:0}
+}
+
 /* compact landscape layout for short phone screens */
 @media (orientation:landscape) and (max-height:520px){
   .map{width:96px;height:96px;top:calc(8px + env(safe-area-inset-top))}
@@ -152,6 +166,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="chip">MONETE <b id="coins">0</b></span><span class="chip">CONSEGNE <b id="deliv">0</b></span></div>
     </div>
     <div class="rtop">
+      <div class="mute" id="fsHud">⛶</div>
       <div class="pausebtn" id="pauseBtn">⏸</div>
       <div class="mute" id="mute">🔊</div>
     </div>
@@ -208,6 +223,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
   </div>
   <div class="cta">
     <button class="btn" id="play">GUIDA</button>
+    <button class="btn ghost" id="fsBtn">⛶ SCHERMO INTERO</button>
     <div class="opts" id="qOpts"><div class="opt" data-q="low">GRAFICA · MEDIA</div><div class="opt sel" data-q="high">GRAFICA · ULTRA</div></div>
   </div>
   <div class="hint"><b>Tastiera:</b> ↑ gas · ↓ freno/retro · ← → sterzo · <b>SPAZIO</b> nitro · <b>P</b> pausa &nbsp;•&nbsp; <b>Touch:</b> GAS / FRENO / sterzo</div>
@@ -4873,7 +4889,16 @@ function buildEnvChips(){ const box=$('#envSel'); box.innerHTML='';
   const dyn=document.createElement('div');dyn.className='envchip';dyn.textContent='DINAMICO ☀︎☾';
   dyn.addEventListener('click',()=>{SET.dynamic=true;saveSet();todClock=0.02;sync();});box.appendChild(dyn); sync();
 }
-function startPlay(){ saveSet(); applyCarSpec(); startRun(); }
+/* ---------- fullscreen ---------- */
+function requestFS(){ const el=document.documentElement;
+  const fn=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+  if(fn){ try{ const r=fn.call(el); if(r&&r.catch) r.catch(()=>{}); }catch(e){} } }
+function toggleFS(){ const d=document;
+  if(!(d.fullscreenElement||d.webkitFullscreenElement)) requestFS();
+  else (d.exitFullscreen||d.webkitExitFullscreen||function(){}).call(d); }
+$('#fsBtn')&&$('#fsBtn').addEventListener('click',toggleFS);
+$('#fsHud')&&$('#fsHud').addEventListener('click',toggleFS);
+function startPlay(){ saveSet(); applyCarSpec(); requestFS(); startRun(); }
 $('#play').addEventListener('click',startPlay);
 $('#carPrev').addEventListener('click',()=>changeCar(-1)); $('#carNext').addEventListener('click',()=>changeCar(1));
 $('#pauseBtn').addEventListener('click',()=>{ if(G.state==='playing')pauseGame(); else if(G.state==='paused')resumeGame(); });
