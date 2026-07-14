@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Apex Drive 3D — Real Engine</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🏎️</text></svg>">
+
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;overflow:hidden;background:#0a0d12;font-family:"Rajdhani",Inter,system-ui,sans-serif;color:#eaf2fb}
+  #app{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  /* loading */
+  #load{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    background:radial-gradient(120% 90% at 50% 20%,#16324e,#070a10 75%);transition:opacity .6s}
+  #load.hide{opacity:0;pointer-events:none}
+  .logo{font-weight:800;font-style:italic;font-size:clamp(30px,7vw,60px);letter-spacing:.01em}
+  .logo i{color:#ff7a2f}
+  .bar{width:min(320px,70vw);height:8px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fb6ff,#5ef0ff);transition:width .3s}
+  .sub{color:#9fb3c7;font-size:13px;letter-spacing:.15em}
+  /* HUD */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;opacity:0;transition:opacity .5s;
+    padding:calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
+  #hud.on{opacity:1}
+  .brand{font-weight:800;font-style:italic;font-size:20px;text-shadow:0 2px 14px rgba(0,0,0,.7)}
+  .brand i{color:#ff7a2f}
+  .speed{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    display:flex;align-items:baseline;gap:8px;background:rgba(9,14,22,.5);border:1px solid rgba(255,255,255,.14);
+    border-radius:16px;padding:7px 18px;backdrop-filter:blur(10px)}
+  .speed b{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums}
+  .speed span{font-size:11px;letter-spacing:.22em;color:#9fb3c7}
+  .tip{position:absolute;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);
+    background:rgba(9,14,22,.5);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:6px 14px;font-size:12px;letter-spacing:.05em;color:#cfe0f0}
+  /* touch controls */
+  .tbtn{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;border-radius:50%;
+    background:rgba(10,16,26,.42);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px);font-weight:800;color:#eaf2fb}
+  .tbtn:active{transform:scale(.93)}
+  .tbtn.left{left:calc(16px + env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));width:78px;height:78px;font-size:30px}
+  .tbtn.right{left:calc(104px + env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));width:78px;height:78px;font-size:30px}
+  .tbtn.gas{right:calc(16px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));width:96px;height:96px;font-size:15px;
+    background:linear-gradient(160deg,rgba(94,240,162,.4),rgba(10,16,26,.55))}
+  .tbtn.brake{right:calc(120px + env(safe-area-inset-right));bottom:calc(26px + env(safe-area-inset-bottom));width:74px;height:74px;font-size:12px;
+    background:linear-gradient(160deg,rgba(255,90,120,.36),rgba(10,16,26,.55))}
+  #touch{opacity:0;transition:opacity .3s}
+  #touch.on{opacity:1}
+  #err{position:fixed;left:50%;top:60%;transform:translateX(-50%);color:#ff8a8a;font-size:13px;max-width:80vw;text-align:center}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div class="brand">APEX<i>DRIVE</i> 3D</div>
+  <div class="tip" id="tip">↑ gas · ↓ freno/retro · ← → sterzo · SPAZIO handbrake</div>
+  <div class="speed"><b id="spd">0</b><span>KM/H</span></div>
+  <div id="touch">
+    <div class="tbtn left" id="tLeft">◄</div>
+    <div class="tbtn right" id="tRight">►</div>
+    <div class="tbtn gas" id="tGas">GAS</div>
+    <div class="tbtn brake" id="tBrake">FRENO</div>
+  </div>
+</div>
+
+<div id="load">
+  <div class="logo">APEX<i>DRIVE</i> 3D</div>
+  <div class="bar"><i id="barFill"></i></div>
+  <div class="sub" id="loadTxt">CARICAMENTO MOTORE…</div>
+  <div id="err"></div>
+</div>
+
+<script type="module" src="/src/main.inline.js"></script>
+</body>
+</html>
