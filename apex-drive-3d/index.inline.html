@@ -46,6 +46,19 @@
   #touch{opacity:0;transition:opacity .3s}
   #touch.on{opacity:1}
   #err{position:fixed;left:50%;top:60%;transform:translateX(-50%);color:#ff8a8a;font-size:13px;max-width:80vw;text-align:center}
+  /* start menu */
+  #menu{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    background:radial-gradient(120% 90% at 50% 15%,rgba(10,22,36,.32),rgba(6,10,16,.72));backdrop-filter:blur(2px);transition:opacity .4s}
+  #menu.hide{opacity:0;pointer-events:none}
+  #menu .mlogo{font-weight:800;font-style:italic;font-size:clamp(30px,7vw,56px)} #menu .mlogo i{color:#ff7a2f}
+  #menu .msub{color:#bcd0e2;letter-spacing:.14em;font-size:13px;text-transform:uppercase}
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:90vw}
+  .swatch{width:46px;height:46px;border-radius:50%;border:3px solid rgba(255,255,255,.25);cursor:pointer;transition:transform .1s;pointer-events:auto}
+  .swatch.sel{border-color:#fff;transform:scale(1.16)}
+  .play{pointer-events:auto;border:0;border-radius:16px;padding:15px 46px;font-size:18px;font-weight:800;letter-spacing:.14em;color:#05121a;cursor:pointer;
+    background:linear-gradient(150deg,#7fe9ff,#2fb6ff);box-shadow:0 10px 40px rgba(47,182,255,.4)}
+  .play:active{transform:scale(.96)}
+  .mhint{color:#8ba0b4;font-size:12px;letter-spacing:.03em;text-align:center;max-width:82vw}
 </style>
 </head>
 <body>
@@ -61,6 +74,14 @@
     <div class="tbtn gas" id="tGas">GAS</div>
     <div class="tbtn brake" id="tBrake">FRENO</div>
   </div>
+</div>
+
+<div id="menu" class="hide">
+  <div class="mlogo">APEX<i>DRIVE</i> 3D</div>
+  <div class="msub">Scegli il colore · poi guida</div>
+  <div class="swatches" id="swatches"></div>
+  <button class="play" id="play">GUIDA ▶</button>
+  <div class="mhint">↑ gas · ↓ freno/retro · ← → sterzo · SPAZIO handbrake · R reset</div>
 </div>
 
 <div id="load">
