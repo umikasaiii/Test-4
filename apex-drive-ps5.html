@@ -159,7 +159,8 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
   .tbtn.right{width:74px;height:74px;bottom:calc(16px + env(safe-area-inset-bottom));left:calc(100px + env(safe-area-inset-left))}
   .tbtn.gas{width:92px;height:92px;bottom:calc(16px + env(safe-area-inset-bottom));right:calc(14px + env(safe-area-inset-right))}
   .tbtn.brake{width:72px;height:72px;bottom:calc(24px + env(safe-area-inset-bottom));right:calc(116px + env(safe-area-inset-right))}
-  .tbtn.nitro{width:58px;height:58px;bottom:calc(122px + env(safe-area-inset-bottom));right:calc(30px + env(safe-area-inset-right))}
+  /* NITRO joins the bottom-right button row so it never collides with the minimap */
+  .tbtn.nitro{width:64px;height:64px;bottom:calc(32px + env(safe-area-inset-bottom));right:calc(196px + env(safe-area-inset-right))}
 }
 </style>
 </head>
@@ -4155,8 +4156,8 @@ const CARS = [
 ];
 
 const ENVS=[
-  {id:'day',  name:'GIORNO', sky:[0x1f6fd6,0x4f9ae8,0x9fd0f5,0xfff2d0], glow:0.25, fog:0x9fc0e8, fogD:0.0016,
-    sun:{c:0xfff4e0,i:2.3,p:[-60,120,-40]}, hemi:{s:0xcfe6ff,g:0x6a7a5a,i:1.05}, key:0xffffff, expo:1.0, bloom:0.3, cloud:1.0, cloudCol:0xffffff, star:0, win:0.12, lamp:0.2},
+  {id:'day',  name:'GIORNO', sky:[0x2472e0,0x57a2ef,0xbfe2fb,0xfff4d6], glow:0.3, fog:0xbfdcf2, fogD:0.0010,
+    sun:{c:0xfff2d4,i:2.7,p:[-70,130,10]}, hemi:{s:0xdcefff,g:0x7c8a5a,i:1.2}, key:0xffffff, expo:1.06, bloom:0.34, cloud:1.0, cloudCol:0xffffff, star:0, win:0.12, lamp:0.2},
   {id:'dusk', name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0026,
     sun:{c:0xffd9b0,i:1.35,p:[-90,70,-60]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.1, bloom:0.5, cloud:0.6, cloudCol:0xffb98a, star:0.35, win:0.9, lamp:1.0},
   {id:'dawn', name:'ALBA', sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0022,
@@ -4174,7 +4175,7 @@ const ENVS=[
 const LOCS=[
   {id:'city',    name:'CITTÀ',             env:0, ground:0x46592f, sand:false, houseStyle:'city',
     b:{downtown:1.0, suburb:16, houses:12, palms:26, torii:0, lamps:'full', mtn:26}},
-  {id:'italy',   name:'CITTÀ ITALIANA',    env:2, ground:0x6a7638, sand:false, houseStyle:'italy',
+  {id:'italy',   name:'CITTÀ ITALIANA',    env:0, ground:0x6a7638, sand:false, houseStyle:'italy',
     b:{downtown:0.5, suburb:8,  houses:34, palms:18, torii:0, lamps:'full', mtn:22}},
   {id:'anime',   name:'CITTÀ ANIME 🇯🇵',    env:6, ground:0x39492f, sand:false, houseStyle:'anime',
     b:{downtown:1.2, suburb:14, houses:16, palms:14, torii:5, lamps:'full', mtn:20}},
@@ -4182,9 +4183,9 @@ const LOCS=[
     b:{downtown:0,   suburb:4,  houses:10, palms:44, torii:0, lamps:'ring', mtn:18}},
   {id:'island',  name:'ISOLA DESERTA',     env:0, ground:0xccb579, sand:true,  houseStyle:'desert',
     b:{downtown:0,   suburb:0,  houses:0,  palms:74, torii:0, lamps:'none', mtn:14}},
-  {id:'mountain',name:'MONTAGNA',          env:1, ground:0x5a6844, sand:false, houseStyle:'chalet',
+  {id:'mountain',name:'MONTAGNA',          env:0, ground:0x5a6844, sand:false, houseStyle:'chalet',
     b:{downtown:0,   suburb:6,  houses:22, palms:0,  torii:0, lamps:'ring', mtn:32}},
-  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:2,ground:0x7a8443, sand:true,  houseStyle:'italy', multi:true,
+  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:0,ground:0x7a8443, sand:true,  houseStyle:'italy', multi:true,
     b:{downtown:0,   suburb:4,  houses:46, palms:22, torii:0, lamps:'ring', mtn:16}},
 ];
 const SET={ car:clamp(+(LS.get('apex_car',0)),0,CARS.length-1), color:+(LS.get('apex_color',0)),
@@ -4231,7 +4232,7 @@ function initEngine(){
   const rt=new THREE.WebGLRenderTarget(dbs.x,dbs.y,{type:CFG.quality==='high'?THREE.HalfFloatType:THREE.UnsignedByteType,samples:CFG.msaa,colorSpace:THREE.LinearSRGBColorSpace});
   composer=new EffectComposer(renderer,rt); composer.setPixelRatio(CFG.pr);
   composer.addPass(new RenderPass(scene,camera));
-  if(CFG.bloom){ bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.3,0.55,0.9); composer.addPass(bloomPass); }
+  if(CFG.bloom){ bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.4,0.6,0.92); composer.addPass(bloomPass); }
   composer.addPass(new OutputPass());
   fxPass=new ShaderPass(PostFX); fxPass.uniforms.resolution.value.set(innerWidth,innerHeight); composer.addPass(fxPass);
 }
@@ -4241,18 +4242,26 @@ function buildSky(){
   const e=curEnv();
   skyU={top:{value:new THREE.Color(e.sky[0])},mid:{value:new THREE.Color(e.sky[1])},horizon:{value:new THREE.Color(e.sky[2])},
     glow:{value:new THREE.Color(e.sky[3])},glowStr:{value:e.glow},starStr:{value:e.star},cloud:{value:e.cloud},
-    cloudCol:{value:new THREE.Color(e.cloudCol)},time:{value:0}};
+    cloudCol:{value:new THREE.Color(e.cloudCol)},time:{value:0},
+    sunDir:{value:new THREE.Vector3(-70,130,10).normalize()},sunCol:{value:new THREE.Color(0xfff0cf)},sunStr:{value:1.0}};
   const mat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:skyU,
     vertexShader:`varying vec3 vp;void main(){vp=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-    fragmentShader:`varying vec3 vp;uniform vec3 top,mid,horizon,glow,cloudCol;uniform float glowStr,starStr,cloud,time;
+    fragmentShader:`varying vec3 vp;uniform vec3 top,mid,horizon,glow,cloudCol,sunDir,sunCol;uniform float glowStr,starStr,cloud,time,sunStr;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash(i),b=hash(i+vec2(1,0)),c2=hash(i+vec2(0,1)),d2=hash(i+vec2(1,1));return mix(mix(a,b,f.x),mix(c2,d2,f.x),f.y);}
       float fbm(vec2 p){float v=0.,a=0.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.02;a*=0.5;}return v;}
       void main(){vec3 d=normalize(vp);float h=clamp(d.y*.5+.5,0.,1.);
         vec3 c=mix(horizon,mid,smoothstep(.0,.5,h));c=mix(c,top,smoothstep(.45,1.,h));
         float g=pow(clamp(1.-abs(d.y)*3.5,0.,1.),2.)*clamp(-d.z*.5+.5,0.,1.);c+=glow*g*glowStr;
+        // sun disc + warm halo (the bright sunny anchor)
+        float sdp=max(dot(d,normalize(sunDir)),0.0);
+        float halo=pow(sdp,180.0)*1.6+pow(sdp,18.0)*0.5+pow(sdp,4.0)*0.14;
+        float disc=smoothstep(0.9986,0.9994,sdp);
+        c+=sunCol*(disc*4.0+halo)*sunStr;
         if(cloud>0.001&&d.y>0.03){vec2 uv=d.xz/(d.y+0.15)*0.8+vec2(time*0.006,time*0.002);float n=fbm(uv*1.4);
-          float cover=smoothstep(0.5,0.9,n)*smoothstep(0.04,0.3,d.y);vec3 cc=mix(cloudCol*0.72,cloudCol,smoothstep(0.5,1.0,n));c=mix(c,cc,clamp(cover*cloud,0.,1.));}
+          float cover=smoothstep(0.5,0.9,n)*smoothstep(0.04,0.3,d.y);vec3 cc=mix(cloudCol*0.72,cloudCol,smoothstep(0.5,1.0,n));
+          cc+=sunCol*pow(sdp,6.0)*0.4*cover;                 // sun-lit cloud rim
+          c=mix(c,cc,clamp(cover*cloud,0.,1.));}
         float st=step(.9992,fract(sin(dot(floor(d.xy*260.),vec2(12.9898,78.233)))*43758.5453));c+=st*smoothstep(.3,1.,h)*vec3(.8,.85,1.)*starStr;
         gl_FragColor=vec4(c,1.);}`});
   const sky=new THREE.Mesh(new THREE.SphereGeometry(1200,32,16),mat); scene.add(sky); scene.background=new THREE.Color(e.sky[1]);
@@ -4284,6 +4293,7 @@ function applyEnv(rebuild=true,e=curEnv()){
   skyU.glowStr.value=e.glow; skyU.starStr.value=e.star??0.5; skyU.cloud.value=e.cloud??0; skyU.cloudCol.value.setHex(e.cloudCol??0xffffff);
   scene.background.setHex(e.sky[1]); scene.fog.color.setHex(e.fog); scene.fog.density=e.fogD;
   sun.color.setHex(e.sun.c); sun.intensity=e.sun.i; sun.position.set(e.sun.p[0],e.sun.p[1],e.sun.p[2]);
+  if(skyU.sunDir){ skyU.sunDir.value.set(e.sun.p[0],e.sun.p[1],e.sun.p[2]).normalize(); skyU.sunCol.value.setHex(e.sun.c); skyU.sunStr.value=clamp(e.sun.i/2.6,0.15,1.25); }
   hemi.color.setHex(e.hemi.s); hemi.groundColor.setHex(e.hemi.g); hemi.intensity=e.hemi.i;
   carKey.color.setHex(e.key); renderer.toneMappingExposure=e.expo; envBloomBase=e.bloom*0.5; lampsDim=e.lamp??1.0;
   curWinEmis=e.win??1.0; for(const b of buildings){ b.material.emissiveIntensity=(b.userData.emisBase||1)*curWinEmis; }
@@ -4291,13 +4301,24 @@ function applyEnv(rebuild=true,e=curEnv()){
   if(rebuild&&renderer) buildEnvironment(e);
 }
 
-const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:1.0},grain:{value:0.012},resolution:{value:new THREE.Vector2(1,1)}},
+/* colour grade: saturation + gentle contrast S-curve + warm "sunny" lift + soft vignette,
+   the "juicy" console-racer post look (à la CTR / Mario Kart 8) */
+const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:0.85},grain:{value:0.008},
+    sat:{value:1.26},contrast:{value:1.10},warm:{value:1.0},lift:{value:0.012},resolution:{value:new THREE.Vector2(1,1)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time,vignette,grain;uniform vec2 resolution;
+  fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time,vignette,grain,sat,contrast,warm,lift;uniform vec2 resolution;
     float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
-    void main(){vec3 col=texture2D(tDiffuse,vUv).rgb;float r=length(vUv-0.5);
-      float vig=smoothstep(0.95,0.35,r*vignette);col*=mix(0.7,1.0,vig);
-      col+=(hash(vUv*resolution+time)*2.-1.)*grain; gl_FragColor=vec4(col,1.);}`};
+    void main(){vec3 col=texture2D(tDiffuse,vUv).rgb;
+      float l=dot(col,vec3(0.2126,0.7152,0.0722));
+      col=mix(vec3(l),col,sat);                              // saturation
+      col=(col-0.5)*contrast+0.5;                            // contrast around mid
+      col+=lift*(1.0-col);                                   // lift shadows a touch (airy)
+      col*=vec3(1.0+warm*0.045,1.0+warm*0.012,1.0-warm*0.035); // warm sunlight
+      col=max(col,0.0);
+      float r=length(vUv-0.5);
+      float vig=smoothstep(0.98,0.32,r*vignette);col*=mix(0.80,1.0,vig);
+      col+=(hash(vUv*resolution+time)*2.-1.)*grain;
+      gl_FragColor=vec4(col,1.);}`};
 
 /* ================= GEOMETRY / CAR ================= */
 function roundedBox(w,h,d,r,s=5){
@@ -4352,7 +4373,7 @@ function buildCar(opt={}){
   const g = new THREE.Group();
   const col = opt.color ?? 0xff5a1e;
   const paint = new THREE.MeshPhysicalMaterial({
-    color: col, metalness:0.85, roughness:0.32, clearcoat:1.0, clearcoatRoughness:0.12, envMapIntensity:1.25 });
+    color: col, metalness:0.55, roughness:0.26, clearcoat:1.0, clearcoatRoughness:0.10, envMapIntensity:1.5 });
   const glass = new THREE.MeshPhysicalMaterial({
     color:0x0a0e14, metalness:0.2, roughness:0.05, clearcoat:1, clearcoatRoughness:0.04,
     envMapIntensity:2.2, opacity:0.92, transparent:true });
@@ -4479,6 +4500,48 @@ function buildPalm(){
     new THREE.MeshStandardMaterial({color:0x5a4a2a, roughness:0.9}));
   co.position.y=h; g.add(co);
   return g;
+}
+/* low-cost stylised foliage/props to fill the world like a console kart racer */
+const VEG={};
+function vegMat(hex,rough){ return new THREE.MeshStandardMaterial({color:hex,roughness:rough==null?0.85:rough,metalness:0,flatShading:true}); }
+function buildBush(){
+  const g=new THREE.Group(); const m=VEG.bush||(VEG.bush=vegMat(0x3f7a34,0.8));
+  const n=2+((Math.random()*3)|0);
+  for(let i=0;i<n;i++){ const r=rand(0.7,1.4); const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),m);
+    b.position.set(rand(-0.9,0.9), r*0.8, rand(-0.9,0.9)); b.scale.y=rand(0.7,1.0); b.castShadow=true; g.add(b); }
+  return g;
+}
+function buildRock(){
+  const m=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(1.0,2.4),0), VEG.rock||(VEG.rock=vegMat(0x746a5c,1.0)));
+  m.scale.set(rand(0.8,1.5),rand(0.5,1.0),rand(0.8,1.5)); m.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+  m.castShadow=true; m.receiveShadow=true; const g=new THREE.Group(); g.add(m); m.position.y=m.scale.y*0.6; return g;
+}
+function buildTree(){
+  const g=new THREE.Group();
+  const th=rand(2.6,4.0);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,th,6), VEG.trunk||(VEG.trunk=vegMat(0x6a4a30,0.9)));
+  trunk.position.y=th/2; trunk.castShadow=true; g.add(trunk);
+  const leaf=VEG.leaf||(VEG.leaf=vegMat(0x347a2e,0.8));
+  for(let i=0;i<3;i++){ const r=rand(1.5,2.3); const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),leaf);
+    b.position.set(rand(-0.8,0.8), th+rand(-0.2,1.2), rand(-0.8,0.8)); b.scale.y=0.85; b.castShadow=true; g.add(b); }
+  return g;
+}
+// keep trackside props off the main roads
+function onRoad(x,z){ const r=Math.hypot(x,z);
+  if(Math.abs(r-210)<12||Math.abs(r-300)<12) return true;
+  if(Math.abs(x)<12 && Math.abs(z)<335) return true;
+  if(Math.abs(z)<12 && Math.abs(x)<335) return true;
+  for(const g of [-120,-60,0,60,120]){ if(Math.abs(x-g)<8 && Math.abs(z)<145) return true; if(Math.abs(z-g)<8 && Math.abs(x)<145) return true; }
+  return false;
+}
+function scatterProp(makeFn,count,rMin,rMax,clear,collide){
+  const HI=CFG.quality==='high'; count=HI?count:Math.ceil(count*0.6);
+  for(let i=0;i<count;i++){ const a=rand(0,6.28), r=rand(rMin,rMax); const x=Math.cos(a)*r,z=Math.sin(a)*r;
+    if(onRoad(x,z)) continue;
+    let near=false; for(const c of colliders){ if(Math.hypot(x-c.x,z-c.z)<c.r+clear){near=true;break;} } if(near)continue;
+    const o=makeFn(); o.position.set(x,terrainH(x,z),z); o.rotation.y=rand(0,6.28); o.scale.multiplyScalar(rand(0.8,1.3)); W().add(o);
+    if(collide) colliders.push({x,z,r:collide});
+  }
 }
 
 /* ================= WORLD ================= */
@@ -4722,6 +4785,15 @@ function buildWorld(){
     let near=false; for(const c of colliders){ if(Math.hypot(x-c.x,z-c.z)<c.r+2){near=true;break;} } if(near)continue;
     const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
+  // lush trackside vegetation & props (fills the world like a console kart racer)
+  const veg = L.id==='island'   ? {bush:8,  rock:30, tree:0}
+            : L.id==='mountain' ? {bush:34, rock:38, tree:30}
+            : L.id==='sea'      ? {bush:44, rock:18, tree:22}
+            : L.id==='amalfi'   ? {bush:40, rock:26, tree:26}
+            :                     {bush:48, rock:20, tree:38};
+  scatterProp(buildBush, veg.bush, 46, GROUND_R-22, 1.5, 0);
+  scatterProp(buildRock, veg.rock, 55, GROUND_R-18, 2.0, 2.2);
+  scatterProp(buildTree, veg.tree, 130, GROUND_R-26, 2.5, 1.6);
   // street lamps
   if(B.lamps!=='none'){ for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
     if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); } }
@@ -4972,6 +5044,7 @@ function update(dt){
   const lampOn = lampsDim>0.4;
   for(const g of lampGroup){ const head=g.children[1]; if(head) head.material.emissiveIntensity=lampOn?5:0.4; }
 
+  if(bloomPass) bloomPass.strength=0.2+envBloomBase*0.7+(nitroActive?0.16:0);
   updateAudio(nitroActive); updateHUD(); fxPass.uniforms.time.value=performance.now()*0.001;
 }
 function updateAudio(nitro){
