@@ -4156,8 +4156,8 @@ const CARS = [
 ];
 
 const ENVS=[
-  {id:'day',  name:'GIORNO', sky:[0x2472e0,0x57a2ef,0xbfe2fb,0xfff4d6], glow:0.3, fog:0xbfdcf2, fogD:0.0010,
-    sun:{c:0xfff2d4,i:2.7,p:[-70,130,10]}, hemi:{s:0xdcefff,g:0x7c8a5a,i:1.2}, key:0xffffff, expo:1.06, bloom:0.34, cloud:1.0, cloudCol:0xffffff, star:0, win:0.12, lamp:0.2},
+  {id:'day',  name:'GIORNO', sky:[0x1670e6,0x3f96f2,0x9fcdf6,0xeaf6ff], glow:0.16, fog:0xa6d0f4, fogD:0.00060,
+    sun:{c:0xfff0cc,i:3.0,p:[-70,120,30]}, hemi:{s:0xbfe2ff,g:0x9aae60,i:1.5}, key:0xffffff, expo:1.12, bloom:0.3, cloud:1.0, cloudCol:0xffffff, star:0, win:0.12, lamp:0.2},
   {id:'dusk', name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0026,
     sun:{c:0xffd9b0,i:1.35,p:[-90,70,-60]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.1, bloom:0.5, cloud:0.6, cloudCol:0xffb98a, star:0.35, win:0.9, lamp:1.0},
   {id:'dawn', name:'ALBA', sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0022,
@@ -4173,19 +4173,19 @@ const ENVS=[
 ];
 // LUOGHI (locations): each reshapes the terrain + which world content is built + a default sky mood.
 const LOCS=[
-  {id:'city',    name:'CITTÀ',             env:0, ground:0x46592f, sand:false, houseStyle:'city',
+  {id:'city',    name:'CITTÀ',             env:0, ground:0x5a9636, sand:false, houseStyle:'city',
     b:{downtown:1.0, suburb:16, houses:12, palms:26, torii:0, lamps:'full', mtn:26}},
-  {id:'italy',   name:'CITTÀ ITALIANA',    env:0, ground:0x6a7638, sand:false, houseStyle:'italy',
+  {id:'italy',   name:'CITTÀ ITALIANA',    env:0, ground:0x74a83c, sand:false, houseStyle:'italy',
     b:{downtown:0.5, suburb:8,  houses:34, palms:18, torii:0, lamps:'full', mtn:22}},
-  {id:'anime',   name:'CITTÀ ANIME 🇯🇵',    env:6, ground:0x39492f, sand:false, houseStyle:'anime',
+  {id:'anime',   name:'CITTÀ ANIME 🇯🇵',    env:6, ground:0x4a8034, sand:false, houseStyle:'anime',
     b:{downtown:1.2, suburb:14, houses:16, palms:14, torii:5, lamps:'full', mtn:20}},
-  {id:'sea',     name:'MARE',              env:0, ground:0x53632f, sand:true,  houseStyle:'italy',
+  {id:'sea',     name:'MARE',              env:0, ground:0x69a23a, sand:true,  houseStyle:'italy',
     b:{downtown:0,   suburb:4,  houses:10, palms:44, torii:0, lamps:'ring', mtn:18}},
-  {id:'island',  name:'ISOLA DESERTA',     env:0, ground:0xccb579, sand:true,  houseStyle:'desert',
+  {id:'island',  name:'ISOLA DESERTA',     env:0, ground:0xe0c67e, sand:true,  houseStyle:'desert',
     b:{downtown:0,   suburb:0,  houses:0,  palms:74, torii:0, lamps:'none', mtn:14}},
-  {id:'mountain',name:'MONTAGNA',          env:0, ground:0x5a6844, sand:false, houseStyle:'chalet',
+  {id:'mountain',name:'MONTAGNA',          env:0, ground:0x6e9a44, sand:false, houseStyle:'chalet',
     b:{downtown:0,   suburb:6,  houses:22, palms:0,  torii:0, lamps:'ring', mtn:32}},
-  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:0,ground:0x7a8443, sand:true,  houseStyle:'italy', multi:true,
+  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:0,ground:0x86ac46, sand:true,  houseStyle:'italy', multi:true,
     b:{downtown:0,   suburb:4,  houses:46, palms:22, torii:0, lamps:'ring', mtn:16}},
 ];
 const SET={ car:clamp(+(LS.get('apex_car',0)),0,CARS.length-1), color:+(LS.get('apex_color',0)),
@@ -4258,9 +4258,12 @@ function buildSky(){
         float halo=pow(sdp,180.0)*1.6+pow(sdp,18.0)*0.5+pow(sdp,4.0)*0.14;
         float disc=smoothstep(0.9986,0.9994,sdp);
         c+=sunCol*(disc*4.0+halo)*sunStr;
-        if(cloud>0.001&&d.y>0.03){vec2 uv=d.xz/(d.y+0.15)*0.8+vec2(time*0.006,time*0.002);float n=fbm(uv*1.4);
-          float cover=smoothstep(0.5,0.9,n)*smoothstep(0.04,0.3,d.y);vec3 cc=mix(cloudCol*0.72,cloudCol,smoothstep(0.5,1.0,n));
-          cc+=sunCol*pow(sdp,6.0)*0.4*cover;                 // sun-lit cloud rim
+        if(cloud>0.001&&d.y>0.02){vec2 uv=d.xz/(d.y+0.15)*0.7+vec2(time*0.006,time*0.002);
+          float n=fbm(uv*1.05), n2=fbm(uv*2.7+3.0); float field=n*0.7+n2*0.3;   // big puffs + fine detail
+          float cover=smoothstep(0.44,0.72,field)*smoothstep(0.02,0.2,d.y);
+          float shade=smoothstep(0.4,0.95,field);            // darker cloud bottoms -> volume
+          vec3 cc=mix(cloudCol*0.62,cloudCol,shade);
+          cc+=sunCol*pow(sdp,5.0)*0.55*cover;                // sun-lit rim
           c=mix(c,cc,clamp(cover*cloud,0.,1.));}
         float st=step(.9992,fract(sin(dot(floor(d.xy*260.),vec2(12.9898,78.233)))*43758.5453));c+=st*smoothstep(.3,1.,h)*vec3(.8,.85,1.)*starStr;
         gl_FragColor=vec4(c,1.);}`});
@@ -4303,8 +4306,8 @@ function applyEnv(rebuild=true,e=curEnv()){
 
 /* colour grade: saturation + gentle contrast S-curve + warm "sunny" lift + soft vignette,
    the "juicy" console-racer post look (à la CTR / Mario Kart 8) */
-const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:0.85},grain:{value:0.008},
-    sat:{value:1.26},contrast:{value:1.10},warm:{value:1.0},lift:{value:0.012},resolution:{value:new THREE.Vector2(1,1)}},
+const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:0.8},grain:{value:0.006},
+    sat:{value:1.42},contrast:{value:1.12},warm:{value:1.25},lift:{value:0.01},resolution:{value:new THREE.Vector2(1,1)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time,vignette,grain,sat,contrast,warm,lift;uniform vec2 resolution;
     float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
@@ -4486,7 +4489,7 @@ function buildPalm(){
   const h=rand(5.5,7.5);
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.26,h,7), trunkMat);
   trunk.position.y=h/2; trunk.castShadow=true; trunk.rotation.z=rand(-0.06,0.06); g.add(trunk);
-  const frondMat=new THREE.MeshStandardMaterial({color:0x2f7d3a, roughness:0.75, metalness:0, side:THREE.DoubleSide});
+  const frondMat=new THREE.MeshStandardMaterial({color:0x3f9c3f, roughness:0.7, metalness:0, side:THREE.DoubleSide});
   const nf=9;
   for(let i=0;i<nf;i++){
     const a=i/nf*Math.PI*2;
@@ -4505,7 +4508,7 @@ function buildPalm(){
 const VEG={};
 function vegMat(hex,rough){ return new THREE.MeshStandardMaterial({color:hex,roughness:rough==null?0.85:rough,metalness:0,flatShading:true}); }
 function buildBush(){
-  const g=new THREE.Group(); const m=VEG.bush||(VEG.bush=vegMat(0x3f7a34,0.8));
+  const g=new THREE.Group(); const m=VEG.bush||(VEG.bush=vegMat(0x54a83e,0.8));
   const n=2+((Math.random()*3)|0);
   for(let i=0;i<n;i++){ const r=rand(0.7,1.4); const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),m);
     b.position.set(rand(-0.9,0.9), r*0.8, rand(-0.9,0.9)); b.scale.y=rand(0.7,1.0); b.castShadow=true; g.add(b); }
@@ -4521,7 +4524,7 @@ function buildTree(){
   const th=rand(2.6,4.0);
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,th,6), VEG.trunk||(VEG.trunk=vegMat(0x6a4a30,0.9)));
   trunk.position.y=th/2; trunk.castShadow=true; g.add(trunk);
-  const leaf=VEG.leaf||(VEG.leaf=vegMat(0x347a2e,0.8));
+  const leaf=VEG.leaf||(VEG.leaf=vegMat(0x49a336,0.8));
   for(let i=0;i<3;i++){ const r=rand(1.5,2.3); const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),leaf);
     b.position.set(rand(-0.8,0.8), th+rand(-0.2,1.2), rand(-0.8,0.8)); b.scale.y=0.85; b.castShadow=true; g.add(b); }
   return g;
@@ -4734,7 +4737,7 @@ function buildWorld(){
     x.fillStyle='#8080ff';x.fillRect(0,0,N,N);for(let i=0;i<1400;i++){const b=120+Math.random()*70|0;x.fillStyle=`rgba(${b},${b},255,0.5)`;x.beginPath();x.arc(Math.random()*N,Math.random()*N,1+Math.random()*3,0,7);x.fill();}
     return new THREE.CanvasTexture(c);})();
   wn.wrapS=wn.wrapT=THREE.RepeatWrapping; wn.repeat.set(140,140); wn.anisotropy=MAXANISO;
-  water=new THREE.MeshStandardMaterial({color:0x0e4f70,metalness:0.9,roughness:0.14,normalMap:wn,normalScale:new THREE.Vector2(0.32,0.32),envMapIntensity:1.35});
+  water=new THREE.MeshStandardMaterial({color:0x1596b8,metalness:0.7,roughness:0.12,normalMap:wn,normalScale:new THREE.Vector2(0.22,0.22),envMapIntensity:1.4,emissive:0x0a3a4a,emissiveIntensity:0.25});
   water.userData.n=wn; applyWater(water);
   const sg=new THREE.PlaneGeometry(2800,2800,HI?200:120,HI?200:120); sg.rotateX(-Math.PI/2);
   seaMesh=new THREE.Mesh(sg,water); seaMesh.position.y=-2.4; W().add(seaMesh);
@@ -4786,11 +4789,11 @@ function buildWorld(){
     const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
   // lush trackside vegetation & props (fills the world like a console kart racer)
-  const veg = L.id==='island'   ? {bush:8,  rock:30, tree:0}
-            : L.id==='mountain' ? {bush:34, rock:38, tree:30}
-            : L.id==='sea'      ? {bush:44, rock:18, tree:22}
-            : L.id==='amalfi'   ? {bush:40, rock:26, tree:26}
-            :                     {bush:48, rock:20, tree:38};
+  const veg = L.id==='island'   ? {bush:12, rock:36, tree:0}
+            : L.id==='mountain' ? {bush:46, rock:44, tree:48}
+            : L.id==='sea'      ? {bush:58, rock:20, tree:36}
+            : L.id==='amalfi'   ? {bush:56, rock:28, tree:42}
+            :                     {bush:62, rock:22, tree:58};
   scatterProp(buildBush, veg.bush, 46, GROUND_R-22, 1.5, 0);
   scatterProp(buildRock, veg.rock, 55, GROUND_R-18, 2.0, 2.2);
   scatterProp(buildTree, veg.tree, 130, GROUND_R-26, 2.5, 1.6);
@@ -4798,8 +4801,8 @@ function buildWorld(){
   if(B.lamps!=='none'){ for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
     if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); } }
   // MOUNTAINS backdrop beyond the sea
-  const mm=new THREE.MeshStandardMaterial({color:0x4c5b67,roughness:1,flatShading:true});
-  const snow=new THREE.MeshStandardMaterial({color:0xe8eff6,roughness:0.9,flatShading:true});
+  const mm=new THREE.MeshStandardMaterial({color:L.id==='mountain'?0x5f7a4a:0x6a8a56,roughness:1,flatShading:true});
+  const snow=new THREE.MeshStandardMaterial({color:0xeef4f8,roughness:0.9,flatShading:true});
   for(let i=0;i<B.mtn;i++){ const a=i/B.mtn*Math.PI*2; const r=rand(560,760); const h=rand(120,320),rad=rand(90,200);
     const c=new THREE.Mesh(new THREE.ConeGeometry(rad,h,5+(Math.random()*3|0),1,true),mm);
     c.position.set(Math.cos(a)*r,h/2-6,Math.sin(a)*r); c.rotation.y=rand(0,6.28); W().add(c);
@@ -5024,7 +5027,7 @@ function update(dt){
   // --- camera chase ---
   const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
   const spd01=clamp(Math.abs(car.speed)/SPEC.boost,0,1);
-  const back=9.5+spd01*0.5, hgt=4.2+spd01*0.35;
+  const back=9.2+spd01*0.5, hgt=4.7+spd01*0.35;
   let cx=car.x-fx*back, cz=car.z-fz*back, cyv=terrainH(cx,cz)+hgt;
   if(G.state==='menu'){ cx=Math.sin(performance.now()*0.0002)*10; cz=15; cyv=5; }
   camera.position.x=dmp(camera.position.x,cx,4,dt);
@@ -5037,7 +5040,7 @@ function update(dt){
   const hFov=(80+spd01*4+(nitroActive?3:0))*Math.PI/180;
   const tfov=clamp(2*Math.atan(Math.tan(hFov/2)/aspect)*180/Math.PI, 42, 64);
   G.camFov=dmp(G.camFov,tfov,4,dt); camera.fov=G.camFov; camera.updateProjectionMatrix();
-  const lookAt = G.state==='menu' ? new THREE.Vector3(0,1,0) : new THREE.Vector3(car.x+fx*8, terrainH(car.x,car.z)+1.5, car.z+fz*8);
+  const lookAt = G.state==='menu' ? new THREE.Vector3(0,1,0) : new THREE.Vector3(car.x+fx*5.5, terrainH(car.x,car.z)+0.8, car.z+fz*5.5);
   camera.lookAt(lookAt);
 
   // lamps glow at night
