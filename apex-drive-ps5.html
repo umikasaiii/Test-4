@@ -4307,7 +4307,7 @@ function applyEnv(rebuild=true,e=curEnv()){
 /* colour grade: saturation + gentle contrast S-curve + warm "sunny" lift + soft vignette,
    the "juicy" console-racer post look (à la CTR / Mario Kart 8) */
 const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:0.8},grain:{value:0.006},
-    sat:{value:1.42},contrast:{value:1.12},warm:{value:1.25},lift:{value:0.01},resolution:{value:new THREE.Vector2(1,1)}},
+    sat:{value:1.55},contrast:{value:1.14},warm:{value:1.35},lift:{value:0.012},resolution:{value:new THREE.Vector2(1,1)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time,vignette,grain,sat,contrast,warm,lift;uniform vec2 resolution;
     float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
@@ -4527,6 +4527,15 @@ function buildTree(){
   const leaf=VEG.leaf||(VEG.leaf=vegMat(0x49a336,0.8));
   for(let i=0;i<3;i++){ const r=rand(1.5,2.3); const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),leaf);
     b.position.set(rand(-0.8,0.8), th+rand(-0.2,1.2), rand(-0.8,0.8)); b.scale.y=0.85; b.castShadow=true; g.add(b); }
+  return g;
+}
+// bright flower clusters for that colourful CTR pop
+function buildFlower(){
+  const g=new THREE.Group(); const cols=[0xff5a7a,0xffd23a,0xff8a2a,0xe85aff,0x5ad0ff,0xffffff,0xff3a5a];
+  const n=4+((Math.random()*4)|0);
+  for(let i=0;i<n;i++){ const c=cols[(Math.random()*cols.length)|0]; const px=rand(-0.5,0.5), pz=rand(-0.5,0.5);
+    const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.5,4), VEG.stem||(VEG.stem=vegMat(0x3f8a2e,0.8))); stem.position.set(px,0.25,pz); g.add(stem);
+    const head=new THREE.Mesh(new THREE.IcosahedronGeometry(0.17,0), new THREE.MeshStandardMaterial({color:c,roughness:0.55,emissive:c,emissiveIntensity:0.3,flatShading:true})); head.position.set(px,0.56,pz); g.add(head); }
   return g;
 }
 // keep trackside props off the main roads
@@ -4789,14 +4798,15 @@ function buildWorld(){
     const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
   // lush trackside vegetation & props (fills the world like a console kart racer)
-  const veg = L.id==='island'   ? {bush:12, rock:36, tree:0}
-            : L.id==='mountain' ? {bush:46, rock:44, tree:48}
-            : L.id==='sea'      ? {bush:58, rock:20, tree:36}
-            : L.id==='amalfi'   ? {bush:56, rock:28, tree:42}
-            :                     {bush:62, rock:22, tree:58};
-  scatterProp(buildBush, veg.bush, 46, GROUND_R-22, 1.5, 0);
-  scatterProp(buildRock, veg.rock, 55, GROUND_R-18, 2.0, 2.2);
-  scatterProp(buildTree, veg.tree, 130, GROUND_R-26, 2.5, 1.6);
+  const veg = L.id==='island'   ? {bush:24, rock:50, tree:0,  flower:30}
+            : L.id==='mountain' ? {bush:80, rock:70, tree:90, flower:60}
+            : L.id==='sea'      ? {bush:96, rock:34, tree:70, flower:110}
+            : L.id==='amalfi'   ? {bush:96, rock:44, tree:80, flower:110}
+            :                     {bush:110,rock:36, tree:110,flower:130};
+  scatterProp(buildBush, veg.bush, 40, GROUND_R-20, 1.2, 0);
+  scatterProp(buildRock, veg.rock, 50, GROUND_R-16, 2.0, 2.2);
+  scatterProp(buildTree, veg.tree, 40, GROUND_R-24, 2.4, 1.6);
+  scatterProp(buildFlower, veg.flower, 30, GROUND_R-20, 0.8, 0);
   // street lamps
   if(B.lamps!=='none'){ for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
     if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); } }
