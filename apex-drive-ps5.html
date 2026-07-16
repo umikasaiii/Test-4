@@ -56,7 +56,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
 
 /* touch controls */
 .touch{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;transition:opacity .3s} .touch.on{opacity:1}
-.tbtn{position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;border-radius:50%;
+.tbtn{position:absolute;pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;border-radius:50%;
   background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);font-weight:800;letter-spacing:.04em;
   color:var(--text);transition:transform .06s,background .1s}
 .tbtn:active,.tbtn.down{transform:scale(.92)}
@@ -4129,10 +4129,11 @@ addEventListener('error',e=>{ loadErr.textContent='Errore: '+(e.message||e); });
 
 const IS_MOBILE=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&innerWidth<1024);
 const CFG={ quality:IS_MOBILE?'low':'high',
-  get pr(){return this.quality==='high'?Math.min(devicePixelRatio,2):Math.min(devicePixelRatio,2.5);},
+  // low/mobile renders at ~1.3x (was 2.5x!) and no MSAA -> far fewer pixels -> smooth + responsive controls
+  get pr(){return this.quality==='high'?Math.min(devicePixelRatio,2):Math.min(devicePixelRatio,1.3);},
   get shadow(){return this.quality==='high'?2048:1024;},
   get bloom(){return this.quality==='high';},
-  get msaa(){return this.quality==='high'?4:2;} };
+  get msaa(){return this.quality==='high'?4:0;} };
 
 const CARS = [
   { id:'apex',    name:'APEX GT',   cls:'HYPER COUPÉ',  style:'coupe',  color:0xff5a1e,
