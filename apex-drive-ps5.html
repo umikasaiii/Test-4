@@ -4683,7 +4683,7 @@ function roadTex(){
   for(let y=0;y<H;y+=64){ x.fillRect(W/2-3,y,6,36); x.fillRect(W*0.28-3,y+16,5,30); x.fillRect(W*0.72-3,y+16,5,30); } // dashed centre + lanes
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=THREE.ClampToEdgeWrapping; t.wrapT=THREE.RepeatWrapping; t.anisotropy=MAXANISO; return t;
 }
-function getRoadMat(){ if(!roadMat){ roadMat=new THREE.MeshStandardMaterial({map:roadTex(),roughness:0.82,metalness:0,envMapIntensity:0.5,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}); } return roadMat; }
+function getRoadMat(){ if(!roadMat){ roadMat=new THREE.MeshStandardMaterial({map:roadTex(),roughness:0.42,metalness:0.35,envMapIntensity:1.35,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}); } return roadMat; }
 /* build a terrain-conforming ribbon along a centreline (list of [x,z]) with lane-marking UVs */
 function ribbonRoad(pts,width){
   const pos=[],uv=[],idx=[]; let cum=0;
@@ -4939,7 +4939,7 @@ function startRun(){
   const c=curCar(); G.state='playing'; G.boost=1; G.coins=0; G.deliveries=0;
   G.mode=curMode; G.timer=(G.mode==='delivery'||G.mode==='coin')?60:0;
   G.score=0; G.integ=100; G.combo=1; G.comboT=0; G.hitCd=0; G.raceEnd=0;
-  car.x=0; car.z=100; car.yaw=Math.PI; car.speed=(G.mode==='race'?14:0);
+  car.x=0; car.z=100; car.yaw=Math.PI; car.speed=0;
   // snap chase camera behind the car so it's framed from frame one
   const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
   camera.position.set(car.x-fx*9.5, terrainH(car.x,car.z)+4.4, car.z-fz*9.5); G.camFov=60; camera.fov=60; camera.updateProjectionMatrix();
@@ -4970,12 +4970,11 @@ function update(dt){
   updateTraffic(dt);
   // --- vehicle control ---
   const dir=(input.right?1:0)-(input.left?1:0);
-  const nitroActive = input.nitro && G.boost>0 && input.throttle && car.speed>4;
-  const autoThr = playing && G.mode==='race' && !G.raceEnd;
+  const nitroActive = input.nitro && G.boost>0 && input.throttle && car.speed>1.5;
   if(playing){
     if(nitroActive){ G.boost=Math.max(0,G.boost-dt*0.3); } else { G.boost=Math.min(1,G.boost+dt*0.12); }
     const top = nitroActive?SPEC.boost:SPEC.maxSpeed;
-    if((input.throttle||autoThr) && !input.brake){ car.speed += SPEC.accel*(nitroActive?1.6:1)*dt; }
+    if(input.throttle){ car.speed += SPEC.accel*(nitroActive?1.6:1)*dt; }
     else if(input.brake){ if(car.speed>0.3) car.speed -= SPEC.brakeDecel*dt; else car.speed -= SPEC.accel*0.7*dt; }
     else { if(car.speed>0) car.speed=Math.max(0,car.speed-SPEC.drag*dt); else if(car.speed<0) car.speed=Math.min(0,car.speed+SPEC.drag*dt); }
     car.speed = clamp(car.speed, -SPEC.revMax, top);
