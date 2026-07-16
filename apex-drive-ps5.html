@@ -4818,19 +4818,20 @@ function buildWorld(){
 const TRAFFIC_COLORS=[0x2fb6ff,0xffffff,0xff4d94,0x5ef0a2,0xffd24a,0x8a2fff,0x1a1d24];
 const traffic=[];
 function buildTraffic(){
-  const HI=CFG.quality==='high'; const N=HI?12:7;
+  const HI=CFG.quality==='high'; const N=HI?24:15;
   for(let i=0;i<N;i++){
     const c=buildCar({color:TRAFFIC_COLORS[i%TRAFFIC_COLORS.length], style:['coupe','hyper','muscle','suv'][i%4]});
     W().add(c); const e={mesh:c,x:0,z:0};
-    if(i%3!==0){ e.kind='ring'; e.r=204+(i%2)*14; e.ang=rand(0,6.28); e.spd=rand(15,26)*(Math.random()<0.5?1:-1); }
-    else { e.kind='road'; e.axis=Math.random()<0.5?'z':'x'; e.t=rand(-200,200); e.dir=Math.random()<0.5?1:-1; e.spd=rand(15,24); }
+    // more cars ON the boulevards (where CORSA runs) so there's real traffic to dodge
+    if(i%2===0){ e.kind='road'; e.axis=Math.random()<0.7?'z':'x'; e.t=rand(-300,300); e.dir=Math.random()<0.5?1:-1; e.spd=rand(14,24); }
+    else { e.kind='ring'; e.r=204+(i%3)*12; e.ang=rand(0,6.28); e.spd=rand(15,26)*(Math.random()<0.5?1:-1); }
     traffic.push(e);
   }
 }
 function updateTraffic(dt){
   for(const e of traffic){ const m=e.mesh; let x,z,yaw;
     if(e.kind==='ring'){ e.ang += e.spd/e.r*dt; x=Math.cos(e.ang)*e.r; z=Math.sin(e.ang)*e.r; yaw=e.ang+(e.spd>0?Math.PI/2:-Math.PI/2); }
-    else { e.t += e.spd*e.dir*dt; if(e.t>250){e.t=250;e.dir=-1;} if(e.t<-250){e.t=-250;e.dir=1;}
+    else { e.t += e.spd*e.dir*dt; if(e.t>320){e.t=320;e.dir=-1;} if(e.t<-320){e.t=-320;e.dir=1;}
       if(e.axis==='z'){ x=e.dir>0?4.5:-4.5; z=e.t; yaw=e.dir>0?0:Math.PI; } else { z=e.dir>0?-4.5:4.5; x=e.t; yaw=e.dir>0?Math.PI/2:-Math.PI/2; } }
     e.x=x; e.z=z; m.position.set(x, terrainH(x,z), z); m.rotation.y=yaw;
     for(const w of m.userData.wheels){ if(w.spin) w.spin.rotation.x += Math.abs(e.spd)*dt/0.5; }
