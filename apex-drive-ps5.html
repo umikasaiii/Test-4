@@ -4158,8 +4158,8 @@ const CARS = [
 const ENVS=[
   {id:'day',  name:'GIORNO', sky:[0x2a72c8,0x5a93d8,0xb6cfe0,0xdfeaf0], glow:0.14, fog:0xc2d4e0, fogD:0.00150,
     sun:{c:0xfff0d6,i:2.7,p:[-70,120,30]}, hemi:{s:0xc2d8ee,g:0x8a9478,i:1.25}, key:0xffffff, expo:1.1, bloom:0.28, cloud:0.9, cloudCol:0xf4f6f8, star:0, win:0.12, lamp:0.2},
-  {id:'dusk', name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0026,
-    sun:{c:0xffd9b0,i:1.35,p:[-90,70,-60]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.1, bloom:0.5, cloud:0.6, cloudCol:0xffb98a, star:0.35, win:0.9, lamp:1.0},
+  {id:'dusk', name:'TRAMONTO', sky:[0x24406e,0x6a6f9a,0xffb277,0xff8a3a], glow:0.85, fog:0xdca878, fogD:0.0018,
+    sun:{c:0xffd0a0,i:2.1,p:[130,26,-90]}, hemi:{s:0xffcfa0,g:0x2a1e24,i:0.9}, key:0xffd8b0, expo:1.14, bloom:0.55, cloud:0.7, cloudCol:0xffcaa0, star:0.05, win:0.55, lamp:0.85},
   {id:'dawn', name:'ALBA', sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0022,
     sun:{c:0xffe6c8,i:1.5,p:[80,60,-60]}, hemi:{s:0xbfd0ff,g:0x2a1e30,i:0.7}, key:0xffe0d0, expo:1.12, bloom:0.45, cloud:0.7, cloudCol:0xffd0c0, star:0.25, win:0.5, lamp:0.8},
   {id:'night',name:'NOTTE', sky:[0x03040c,0x0a1230,0x241844,0x3a2fff], glow:0.35, fog:0x05060f, fogD:0.0032,
@@ -4173,19 +4173,19 @@ const ENVS=[
 ];
 // LUOGHI (locations): each reshapes the terrain + which world content is built + a default sky mood.
 const LOCS=[
-  {id:'city',    name:'CITTÀ',             env:0, ground:0x5a9636, sand:false, houseStyle:'city',
+  {id:'city',    name:'CITTÀ',             env:1, ground:0x5a9636, sand:false, houseStyle:'city',
     b:{downtown:1.0, suburb:16, houses:12, palms:26, torii:0, lamps:'full', mtn:26}},
-  {id:'italy',   name:'CITTÀ ITALIANA',    env:0, ground:0x74a83c, sand:false, houseStyle:'italy',
+  {id:'italy',   name:'CITTÀ ITALIANA',    env:1, ground:0x74a83c, sand:false, houseStyle:'italy',
     b:{downtown:0.5, suburb:8,  houses:34, palms:18, torii:0, lamps:'full', mtn:22}},
   {id:'anime',   name:'CITTÀ ANIME 🇯🇵',    env:6, ground:0x4a8034, sand:false, houseStyle:'anime',
     b:{downtown:1.2, suburb:14, houses:16, palms:14, torii:5, lamps:'full', mtn:20}},
-  {id:'sea',     name:'MARE',              env:0, ground:0x69a23a, sand:true,  houseStyle:'italy',
+  {id:'sea',     name:'MARE',              env:1, ground:0x69a23a, sand:true,  houseStyle:'italy',
     b:{downtown:0,   suburb:4,  houses:10, palms:44, torii:0, lamps:'ring', mtn:18}},
-  {id:'island',  name:'ISOLA DESERTA',     env:0, ground:0xe0c67e, sand:true,  houseStyle:'desert',
+  {id:'island',  name:'ISOLA DESERTA',     env:1, ground:0xe0c67e, sand:true,  houseStyle:'desert',
     b:{downtown:0,   suburb:0,  houses:0,  palms:74, torii:0, lamps:'none', mtn:14}},
-  {id:'mountain',name:'MONTAGNA',          env:0, ground:0x6e9a44, sand:false, houseStyle:'chalet',
+  {id:'mountain',name:'MONTAGNA',          env:1, ground:0x6e9a44, sand:false, houseStyle:'chalet',
     b:{downtown:0,   suburb:6,  houses:22, palms:0,  torii:0, lamps:'ring', mtn:32}},
-  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:0,ground:0x86ac46, sand:true,  houseStyle:'italy', multi:true,
+  {id:'amalfi',  name:'COSTIERA AMALFITANA',env:1,ground:0x86ac46, sand:true,  houseStyle:'italy', multi:true,
     b:{downtown:0,   suburb:4,  houses:46, palms:22, torii:0, lamps:'ring', mtn:16}},
 ];
 const SET={ car:clamp(+(LS.get('apex_car',0)),0,CARS.length-1), color:+(LS.get('apex_color',0)),
@@ -4376,7 +4376,7 @@ function buildCar(opt={}){
   const g = new THREE.Group();
   const col = opt.color ?? 0xff5a1e;
   const paint = new THREE.MeshPhysicalMaterial({
-    color: col, metalness:0.55, roughness:0.26, clearcoat:1.0, clearcoatRoughness:0.10, envMapIntensity:1.5 });
+    color: col, metalness:0.6, roughness:0.18, clearcoat:1.0, clearcoatRoughness:0.06, envMapIntensity:2.2 });
   const glass = new THREE.MeshPhysicalMaterial({
     color:0x0a0e14, metalness:0.2, roughness:0.05, clearcoat:1, clearcoatRoughness:0.04,
     envMapIntensity:2.2, opacity:0.92, transparent:true });
@@ -4731,6 +4731,23 @@ function addLamp(x,z){
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,10,8),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffb15a,emissiveIntensity:4,roughness:0.4}));
   head.position.y=7; g.add(head); g.position.set(x,terrainH(x,z),z); W().add(g); lampGroup.push(g);
 }
+const railMat=new THREE.MeshStandardMaterial({color:0xbcc2ca,metalness:0.75,roughness:0.4,envMapIntensity:1.1});
+const kerbMat=new THREE.MeshStandardMaterial({color:0x9aa0a8,roughness:0.9,metalness:0.05});
+// "constructed road": kerbs, metal guardrail + dense lamps along a straight boulevard
+function addBoulevard(ax){ // ax='z': road along z at x=0 ; ax='x': road along x at z=0
+  const half=9.4, L=330, step=8;
+  for(const s of [-1,1]){
+    for(let t=-L;t<=L;t+=step){
+      const x=ax==='z'? s*half : t, z=ax==='z'? t : s*half, y=terrainH(x,z);
+      const post=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.9,0.16),railMat); post.position.set(x,y+0.45,z); W().add(post);
+      const rail=new THREE.Mesh(new THREE.BoxGeometry(ax==='z'?0.1:step,0.26,ax==='z'?step:0.1),railMat); rail.position.set(x,y+0.72,z); W().add(rail);
+      // kerb strip just inside the rail
+      const kx=ax==='z'? s*(half-0.8):x, kz=ax==='z'? z : s*(half-0.8);
+      const kerb=new THREE.Mesh(new THREE.BoxGeometry(ax==='z'?0.5:step,0.24,ax==='z'?step:0.5),kerbMat); kerb.position.set(kx,terrainH(kx,kz)+0.12,kz); kerb.receiveShadow=true; W().add(kerb);
+    }
+    for(let t=-L;t<=L;t+=24){ const x=ax==='z'? s*(half+2):t, z=ax==='z'? t : s*(half+2); addLamp(x,z); }
+  }
+}
 function addCoin(x,z){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.18,16),new THREE.MeshStandardMaterial({color:0xffd24a,emissive:0xffb020,emissiveIntensity:1.4,metalness:0.8,roughness:0.3}));
   m.rotation.z=Math.PI/2; m.position.set(x,terrainH(x,z)+1.2,z); m.userData.active=true; W().add(m); coins.push(m);
@@ -4803,18 +4820,19 @@ function buildWorld(){
     const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
   // lush trackside vegetation & props (fills the world like a console kart racer)
-  const veg = L.id==='island'   ? {bush:24, rock:50, tree:0,  flower:0}
-            : L.id==='mountain' ? {bush:70, rock:70, tree:90, flower:0}
-            : L.id==='sea'      ? {bush:70, rock:34, tree:64, flower:0}
-            : L.id==='amalfi'   ? {bush:70, rock:44, tree:70, flower:0}
-            :                     {bush:80, rock:36, tree:96, flower:0};
+  const veg = L.id==='island'   ? {bush:24, rock:44, tree:0,  flower:0}
+            : L.id==='mountain' ? {bush:50, rock:60, tree:66, flower:0}
+            : L.id==='sea'      ? {bush:50, rock:30, tree:50, flower:0}
+            : L.id==='amalfi'   ? {bush:50, rock:38, tree:52, flower:0}
+            :                     {bush:54, rock:30, tree:64, flower:0};
   scatterProp(buildBush, veg.bush, 40, GROUND_R-20, 1.2, 0);
   scatterProp(buildRock, veg.rock, 50, GROUND_R-16, 2.0, 2.2);
   scatterProp(buildTree, veg.tree, 40, GROUND_R-24, 2.4, 1.6);
   scatterProp(buildFlower, veg.flower, 30, GROUND_R-20, 0.8, 0);
-  // street lamps
+  // street lamps + constructed-road guardrails/kerbs along the main boulevards
   if(B.lamps!=='none'){ for(let a=0;a<6.28;a+=0.5){ addLamp(Math.cos(a)*210-Math.sin(a)*10, Math.sin(a)*210+Math.cos(a)*10); }
-    if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); } }
+    if(B.lamps==='full') for(const gx of [-60,0,60]) for(let z=-120;z<=120;z+=60){ addLamp(gx+7,z); }
+    addBoulevard('z'); addBoulevard('x'); }
   // MOUNTAINS backdrop beyond the sea
   const mm=new THREE.MeshStandardMaterial({color:L.id==='mountain'?0x5f7a4a:0x6a8a56,roughness:1,flatShading:true});
   const snow=new THREE.MeshStandardMaterial({color:0xeef4f8,roughness:0.9,flatShading:true});
@@ -5226,7 +5244,7 @@ document.querySelectorAll('#qOpts .opt').forEach(o=>o.classList.toggle('sel',o.d
 try{ window.__dbg=function(){ return {state:G.state,yaw:car.yaw,speed:car.speed,x:car.x,z:car.z,loc:LOC.id,camy:camera?camera.position.y:0}; }; }catch(e){}
 function boot(){ try{
   if(IS_MOBILE) document.body.classList.add('mobile');
-  LOC=LOCS[SET.loc]; SET.env=clamp(SET.env,0,ENVS.length-1);
+  LOC=LOCS[SET.loc]; SET.env=clamp(LOC.env,0,ENVS.length-1); saveSet();
   initEngine(); buildWorld(); buildTraffic(); buildDelivery(); applyCarSpec(); buildPlayerCar(); applyEnv(false); buildLocChips(); buildEnvChips(); buildModeChips(); refreshGarage();
   clock.start(); animate(); loadEl.classList.add('hide'); setTimeout(()=>loadEl.remove(),600);
 }catch(err){ console.error(err); loadErr.textContent='Impossibile inizializzare: '+err.message; } }
