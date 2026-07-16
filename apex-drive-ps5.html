@@ -4156,8 +4156,8 @@ const CARS = [
 ];
 
 const ENVS=[
-  {id:'day',  name:'GIORNO', sky:[0x1670e6,0x3f96f2,0x9fcdf6,0xeaf6ff], glow:0.16, fog:0xa6d0f4, fogD:0.00060,
-    sun:{c:0xfff0cc,i:3.0,p:[-70,120,30]}, hemi:{s:0xbfe2ff,g:0x9aae60,i:1.5}, key:0xffffff, expo:1.12, bloom:0.3, cloud:1.0, cloudCol:0xffffff, star:0, win:0.12, lamp:0.2},
+  {id:'day',  name:'GIORNO', sky:[0x2a72c8,0x5a93d8,0xb6cfe0,0xdfeaf0], glow:0.14, fog:0xc2d4e0, fogD:0.00150,
+    sun:{c:0xfff0d6,i:2.7,p:[-70,120,30]}, hemi:{s:0xc2d8ee,g:0x8a9478,i:1.25}, key:0xffffff, expo:1.1, bloom:0.28, cloud:0.9, cloudCol:0xf4f6f8, star:0, win:0.12, lamp:0.2},
   {id:'dusk', name:'TRAMONTO', sky:[0x0a1230,0x1b2a52,0x5a3a6e,0xff7a3f], glow:0.62, fog:0x24263c, fogD:0.0026,
     sun:{c:0xffd9b0,i:1.35,p:[-90,70,-60]}, hemi:{s:0x9fb8ff,g:0x120a1e,i:0.55}, key:0xbfd6ff, expo:1.1, bloom:0.5, cloud:0.6, cloudCol:0xffb98a, star:0.35, win:0.9, lamp:1.0},
   {id:'dawn', name:'ALBA', sky:[0x1a2450,0x4a5a9a,0xff9ec4,0xffd27a], glow:0.7, fog:0x6a6a8c, fogD:0.0022,
@@ -4307,7 +4307,7 @@ function applyEnv(rebuild=true,e=curEnv()){
 /* colour grade: saturation + gentle contrast S-curve + warm "sunny" lift + soft vignette,
    the "juicy" console-racer post look (à la CTR / Mario Kart 8) */
 const PostFX={uniforms:{tDiffuse:{value:null},time:{value:0},vignette:{value:0.8},grain:{value:0.006},
-    sat:{value:1.55},contrast:{value:1.14},warm:{value:1.35},lift:{value:0.012},resolution:{value:new THREE.Vector2(1,1)}},
+    sat:{value:1.04},contrast:{value:1.1},warm:{value:1.05},lift:{value:0.006},resolution:{value:new THREE.Vector2(1,1)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
   fragmentShader:`varying vec2 vUv;uniform sampler2D tDiffuse;uniform float time,vignette,grain,sat,contrast,warm,lift;uniform vec2 resolution;
     float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
@@ -4636,22 +4636,21 @@ function facadeTex(){
   const em=new THREE.CanvasTexture(ec);em.colorSpace=THREE.SRGBColorSpace;em.anisotropy=MAXANISO;em.wrapS=em.wrapT=THREE.RepeatWrapping; return {map:m,emis:em};
 }
 const roofCapMat=new THREE.MeshStandardMaterial({color:0x2a2f37,roughness:0.8,metalness:0.3});
-// bright, varied toon palette so the skyline reads colourful & hand-painted
-const BUILDING_COLORS=[0x3fa9e0,0xff6a4a,0xffc23a,0x54cf8e,0xff8ac0,0x7a6cff,0x2ec4b6,0xffa24a,0xe8ecf2,0xef5da8,0x9ad24a,0x5a8fff];
-const ROOF_COLORS=[0xd94f3a,0x2f6fb0,0x2a9d6a,0xe0a52a,0x7a4fd0,0x38b0a6,0xc94a7a];
+// realistic glass/concrete tower palette (muted blues, greys, warm stone)
+const BUILDING_COLORS=[0x8a97a6,0x6f7d8e,0x9aa3ad,0x59677a,0xa7aeb5,0x74808e,0x8f9aa6,0x6a7480,0xb0aca4,0x7e8794,0x5f6b7c,0x99a0a6];
+const ROOF_COLORS=[0x3a4048,0x2e343c,0x444a52];
 function addBuilding(x,z,w,h,d){
   const tex=FACADE_POOL[(Math.random()*FACADE_POOL.length)|0];
   const rx=Math.max(1,Math.round(w/6)), ry=Math.max(2,Math.round(h/5));
   const map=tex.map.clone(); map.needsUpdate=true; map.repeat.set(rx,ry);
   const emis=tex.emis.clone(); emis.needsUpdate=true; emis.repeat.set(rx,ry);
   const col=BUILDING_COLORS[(Math.random()*BUILDING_COLORS.length)|0];
-  const mat=new THREE.MeshStandardMaterial({color:col,roughness:0.6,metalness:0.05,map,emissive:0xffffff,emissiveMap:emis,emissiveIntensity:curWinEmis,envMapIntensity:0.7});
+  // glassy, reflective facade for a real city look
+  const mat=new THREE.MeshStandardMaterial({color:col,roughness:0.32,metalness:0.55,map,emissive:0xffffff,emissiveMap:emis,emissiveIntensity:curWinEmis,envMapIntensity:1.5});
   const m=new THREE.Mesh(roundedBox(w,h,d,0.1,2),mat); m.position.set(x,terrainH(x,z)+h/2-0.3,z); m.castShadow=true; m.receiveShadow=true;
   m.userData.emisBase=rand(0.7,1.3); m.material.emissiveIntensity=m.userData.emisBase*curWinEmis;
-  // coloured roof band + parapet cap + rooftop details
-  const roofCol=ROOF_COLORS[(Math.random()*ROOF_COLORS.length)|0];
-  const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,1.1,d+0.3),new THREE.MeshStandardMaterial({color:roofCol,roughness:0.6})); band.position.y=h/2-0.4; band.castShadow=true; m.add(band);
-  const cap=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.7,d+0.5),roofCapMat); cap.position.y=h/2+0.25; cap.castShadow=true; m.add(cap);
+  // dark parapet cap + rooftop details
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(w+0.4,0.8,d+0.4),roofCapMat); cap.position.y=h/2+0.2; cap.castShadow=true; m.add(cap);
   if(h>18){ const ac=new THREE.Mesh(new THREE.BoxGeometry(w*0.34,1.8,d*0.34),roofCapMat); ac.position.set(rand(-w*0.18,w*0.18),h/2+1.3,rand(-d*0.18,d*0.18)); ac.castShadow=true; m.add(ac);
     const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,rand(2,4),4),roofCapMat); ant.position.set(rand(-w*0.2,w*0.2),h/2+2.4,rand(-d*0.2,d*0.2)); m.add(ant); }
   W().add(m); buildings.push(m);
@@ -4698,7 +4697,7 @@ function roadTex(){
   for(let y=0;y<H;y+=64){ x.fillRect(W/2-3,y,6,36); x.fillRect(W*0.28-3,y+16,5,30); x.fillRect(W*0.72-3,y+16,5,30); } // dashed centre + lanes
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=THREE.ClampToEdgeWrapping; t.wrapT=THREE.RepeatWrapping; t.anisotropy=MAXANISO; return t;
 }
-function getRoadMat(){ if(!roadMat){ roadMat=new THREE.MeshStandardMaterial({map:roadTex(),roughness:0.42,metalness:0.35,envMapIntensity:1.35,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}); } return roadMat; }
+function getRoadMat(){ if(!roadMat){ roadMat=new THREE.MeshStandardMaterial({color:0x9098a0,map:roadTex(),roughness:0.55,metalness:0.2,envMapIntensity:0.85,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}); } return roadMat; }
 /* build a terrain-conforming ribbon along a centreline (list of [x,z]) with lane-marking UVs */
 function ribbonRoad(pts,width){
   const pos=[],uv=[],idx=[]; let cum=0;
@@ -4804,11 +4803,11 @@ function buildWorld(){
     const p=buildPalm(); p.position.set(x,terrainH(x,z),z); p.rotation.y=rand(0,6.28); W().add(p);
   }
   // lush trackside vegetation & props (fills the world like a console kart racer)
-  const veg = L.id==='island'   ? {bush:24, rock:50, tree:0,  flower:30}
-            : L.id==='mountain' ? {bush:80, rock:70, tree:90, flower:60}
-            : L.id==='sea'      ? {bush:96, rock:34, tree:70, flower:110}
-            : L.id==='amalfi'   ? {bush:96, rock:44, tree:80, flower:110}
-            :                     {bush:110,rock:36, tree:110,flower:130};
+  const veg = L.id==='island'   ? {bush:24, rock:50, tree:0,  flower:0}
+            : L.id==='mountain' ? {bush:70, rock:70, tree:90, flower:0}
+            : L.id==='sea'      ? {bush:70, rock:34, tree:64, flower:0}
+            : L.id==='amalfi'   ? {bush:70, rock:44, tree:70, flower:0}
+            :                     {bush:80, rock:36, tree:96, flower:0};
   scatterProp(buildBush, veg.bush, 40, GROUND_R-20, 1.2, 0);
   scatterProp(buildRock, veg.rock, 50, GROUND_R-16, 2.0, 2.2);
   scatterProp(buildTree, veg.tree, 40, GROUND_R-24, 2.4, 1.6);
