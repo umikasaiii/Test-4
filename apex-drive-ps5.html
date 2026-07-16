@@ -171,7 +171,7 @@ html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#03050a;col
   <div class="topline">
     <div>
       <div class="brand">APEX<i>DRIVE</i></div>
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="chip">MONETE <b id="coins">0</b></span><span class="chip">CONSEGNE <b id="deliv">0</b></span></div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><span class="chip" id="chA">MONETE <b id="coins">0</b></span><span class="chip" id="chB">CONSEGNE <b id="deliv">0</b></span></div>
     </div>
     <div class="rtop">
       <div class="mute" id="fsHud">⛶</div>
@@ -4927,17 +4927,22 @@ function drawMap(){
 }
 
 /* ================= GAME STATE / RUN ================= */
-const G={state:'menu',boost:1,coins:0,deliveries:0,camFov:60,shake:0,mode:'free',timer:0,cpTotal:6};
-const MODES=[{id:'free',name:'LIBERA'},{id:'delivery',name:'CONSEGNE ⏱'},{id:'crono',name:'GIRO VELOCE ⏱'},{id:'coin',name:'RACCOLTA ⏱'}];
-let curMode='free';
+const G={state:'menu',boost:1,coins:0,deliveries:0,camFov:60,shake:0,mode:'free',timer:0,cpTotal:6,
+  score:0,integ:100,combo:1,comboT:0,hitCd:0,raceEnd:0};
+const MODES=[{id:'race',name:'CORSA ∞ 🏁'},{id:'free',name:'LIBERA'},{id:'delivery',name:'CONSEGNE ⏱'},{id:'crono',name:'GIRO VELOCE ⏱'},{id:'coin',name:'RACCOLTA ⏱'}];
+let curMode='race';
+function raceOver(){ if(G.raceEnd)return; G.raceEnd=1; const sc=Math.floor(G.score); const best=+LS.get('apex_race',0);
+  if(sc>best) LS.set('apex_race',sc); toast('CORSA FINITA · '+sc+' PT'+(sc>best?'  ★ RECORD':''),'#ffd24a');
+  setTimeout(()=>{ if(G.state==='playing') toMenu(); }, 2000); }
 function startRun(){
   const c=curCar(); G.state='playing'; G.boost=1; G.coins=0; G.deliveries=0;
   G.mode=curMode; G.timer=(G.mode==='delivery'||G.mode==='coin')?60:0;
-  car.x=0; car.z=100; car.yaw=Math.PI; car.speed=0;
+  G.score=0; G.integ=100; G.combo=1; G.comboT=0; G.hitCd=0; G.raceEnd=0;
+  car.x=0; car.z=100; car.yaw=Math.PI; car.speed=(G.mode==='race'?14:0);
   // snap chase camera behind the car so it's framed from frame one
   const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
   camera.position.set(car.x-fx*9.5, terrainH(car.x,car.z)+4.4, car.z-fz*9.5); G.camFov=60; camera.fov=60; camera.updateProjectionMatrix();
-  if(G.mode==='coin'){ delivery.active=false; if(deliveryMarker) deliveryMarker.visible=false; } else newDelivery();
+  if(G.mode==='coin'||G.mode==='race'){ delivery.active=false; if(deliveryMarker) deliveryMarker.visible=false; } else newDelivery();
   coins.forEach(m=>{m.userData.active=true;m.visible=true;});
   $('#menu').classList.add('hide'); $('#pause').classList.add('hide');
   $('#hud').classList.add('on'); if(IS_MOBILE)$('#touch').classList.add('on');
@@ -4965,10 +4970,11 @@ function update(dt){
   // --- vehicle control ---
   const dir=(input.right?1:0)-(input.left?1:0);
   const nitroActive = input.nitro && G.boost>0 && input.throttle && car.speed>4;
+  const autoThr = playing && G.mode==='race' && !G.raceEnd;
   if(playing){
     if(nitroActive){ G.boost=Math.max(0,G.boost-dt*0.3); } else { G.boost=Math.min(1,G.boost+dt*0.12); }
     const top = nitroActive?SPEC.boost:SPEC.maxSpeed;
-    if(input.throttle){ car.speed += SPEC.accel*(nitroActive?1.6:1)*dt; }
+    if((input.throttle||autoThr) && !input.brake){ car.speed += SPEC.accel*(nitroActive?1.6:1)*dt; }
     else if(input.brake){ if(car.speed>0.3) car.speed -= SPEC.brakeDecel*dt; else car.speed -= SPEC.accel*0.7*dt; }
     else { if(car.speed>0) car.speed=Math.max(0,car.speed-SPEC.drag*dt); else if(car.speed<0) car.speed=Math.min(0,car.speed+SPEC.drag*dt); }
     car.speed = clamp(car.speed, -SPEC.revMax, top);
@@ -4984,7 +4990,12 @@ function update(dt){
       if(d<min && d>0.0001){ nx=c.x+ddx/d*min; nz=c.z+ddz/d*min; if(car.speed>0)car.speed*=0.25; else car.speed*=0.5; G.shake=Math.min(0.5,Math.abs(car.speed)*0.02+0.15); } }
     // traffic collisions (bump)
     for(const e of traffic){ const ddx=nx-e.x, ddz=nz-e.z, d=Math.hypot(ddx,ddz), min=CAR_R+2.6;
-      if(d<min && d>0.0001){ nx=e.x+ddx/d*min; nz=e.z+ddz/d*min; car.speed*=0.5; G.shake=Math.min(0.5,Math.abs(car.speed)*0.02+0.12); } }
+      if(d<min && d>0.0001){ nx=e.x+ddx/d*min; nz=e.z+ddz/d*min; car.speed*=0.5; G.shake=Math.min(0.5,Math.abs(car.speed)*0.02+0.12);
+        if(G.mode==='race' && G.hitCd<=0 && !G.raceEnd){ G.integ-=22; G.combo=1; G.comboT=0; G.hitCd=1.0; toast('SCONTRO −22 ♥','#ff4d94'); if(G.integ<=0){ G.integ=0; raceOver(); } } } }
+    // race: distance score + rising combo
+    if(G.mode==='race' && !G.raceEnd){ G.hitCd=Math.max(0,G.hitCd-dt);
+      G.score += Math.abs(car.speed)*dt*0.6*G.combo;
+      G.comboT+=dt; if(G.comboT>=5){ G.comboT=0; if(G.combo<9){ G.combo++; toast('COMBO x'+G.combo,'#5ef0ff'); } } }
     // island boundary (soft wall at the beach)
     const rad=Math.hypot(nx,nz);
     if(rad>R_LAND){ const s=R_LAND/rad; nx*=s; nz*=s; car.speed*=0.4; }
@@ -5062,10 +5073,13 @@ function updateAudio(nitro){
 function updateHUD(){
   const kmh=Math.round(Math.abs(car.speed)*3.6); H.spd.textContent=kmh;
   H.gear.textContent = car.speed<-0.5?'RETRO' : car.speed<0.5?'FOLLE' : 'MARCIA '+clamp(Math.floor(car.speed/9)+1,1,6);
-  setGauge(Math.abs(car.speed)/SPEC.boost); H.coins.textContent=G.coins; H.deliv.textContent=G.deliveries;
+  setGauge(Math.abs(car.speed)/SPEC.boost);
+  if(G.mode==='race'){ $('#chA').childNodes[0].nodeValue='PUNTI '; H.coins.textContent=Math.floor(G.score);
+    $('#chB').childNodes[0].nodeValue='VITA '; H.deliv.textContent=Math.max(0,Math.round(G.integ))+'% ×'+G.combo; }
+  else { $('#chA').childNodes[0].nodeValue='MONETE '; H.coins.textContent=G.coins; $('#chB').childNodes[0].nodeValue='CONSEGNE '; H.deliv.textContent=G.deliveries; }
   // mode timer
   const tEl=$('#timer');
-  if(G.mode!=='free' && G.state==='playing'){ tEl.style.display='';
+  if((G.mode==='delivery'||G.mode==='coin'||G.mode==='crono') && G.state==='playing'){ tEl.style.display='';
     $('#timerVal').textContent = G.mode==='crono' ? G.timer.toFixed(1)+'s  ('+G.deliveries+'/'+G.cpTotal+')' : Math.ceil(G.timer)+'s';
     tEl.style.color = (G.mode!=='crono'&&G.timer<10)?'#ff4d94':'var(--cyan)';
   } else tEl.style.display='none';
