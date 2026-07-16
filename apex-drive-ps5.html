@@ -4617,37 +4617,43 @@ function facadeTex(){
   // one "floor unit" of facade: concrete spandrel + framed window row; tiled per building for constant window size
   const W=128,H=128; const mc=document.createElement('canvas');mc.width=W;mc.height=H;const mx=mc.getContext('2d');
   const ec=document.createElement('canvas');ec.width=W;ec.height=H;const ex=ec.getContext('2d');
-  const wallShade=38+Math.random()*10|0;
-  mx.fillStyle=`rgb(${wallShade},${wallShade+6},${wallShade+14})`;mx.fillRect(0,0,W,H); ex.fillStyle='#000';ex.fillRect(0,0,W,H);
-  // concrete spandrel band top & bottom
-  mx.fillStyle='#1c222b'; mx.fillRect(0,0,W,10); mx.fillRect(0,H-10,W,10);
+  // LIGHT walls so each building's bright colour shows through (colour * map); darker window panes
+  mx.fillStyle='#ececee';mx.fillRect(0,0,W,H); ex.fillStyle='#000';ex.fillRect(0,0,W,H);
+  // slightly shaded spandrel bands (floor divisions)
+  mx.fillStyle='#cdd0d4'; mx.fillRect(0,0,W,10); mx.fillRect(0,H-10,W,10); mx.fillRect(0,H/2-3,W,6);
   const cols=4,cw=W/cols;
-  for(let i=0;i<cols;i++){ const gx=i*cw+7,gy=16,gw=cw-14,gh=H-32;
-    mx.fillStyle='#12161d'; mx.fillRect(gx-2,gy-2,gw+4,gh+4);   // dark frame
-    const lit=Math.random()<0.32;
+  for(let i=0;i<cols;i++){ const gx=i*cw+7,gy=15,gw=cw-14,gh=H-30;
+    mx.fillStyle='#2a333f'; mx.fillRect(gx-2,gy-2,gw+4,gh+4);            // dark window frame
+    const lit=Math.random()<0.3;
     if(lit){ const warm=Math.random()<0.78; const c=warm?`rgb(255,${205+Math.random()*40|0},${150+Math.random()*70|0})`:`rgb(${175+Math.random()*70|0},${215+Math.random()*40|0},255)`;
       mx.fillStyle=c;mx.fillRect(gx,gy,gw,gh); ex.fillStyle=c;ex.fillRect(gx,gy,gw,gh);
-      // mullion cross so lit panes still read as windows
       ex.fillStyle='rgba(0,0,0,.35)'; ex.fillRect(gx+gw/2-1,gy,2,gh); ex.fillRect(gx,gy+gh/2-1,gw,2);
-    } else { const g=26+Math.random()*16|0; mx.fillStyle=`rgb(${g},${g+8},${g+16})`; mx.fillRect(gx,gy,gw,gh); }
-    mx.fillStyle='rgba(0,0,0,.4)'; mx.fillRect(gx+gw/2-1,gy,2,gh); mx.fillRect(gx,gy+gh/2-1,gw,2); // mullions
+    } else { mx.fillStyle='#5a6b7d'; mx.fillRect(gx,gy,gw,gh);            // glassy blue-grey pane
+      mx.fillStyle='rgba(255,255,255,.18)'; mx.fillRect(gx,gy,gw,gh*0.4); }  // sky reflection highlight
+    mx.fillStyle='rgba(20,26,34,.5)'; mx.fillRect(gx+gw/2-1,gy,2,gh); mx.fillRect(gx,gy+gh/2-1,gw,2); // mullions
   }
   const m=new THREE.CanvasTexture(mc);m.colorSpace=THREE.SRGBColorSpace;m.anisotropy=MAXANISO;m.wrapS=m.wrapT=THREE.RepeatWrapping;
   const em=new THREE.CanvasTexture(ec);em.colorSpace=THREE.SRGBColorSpace;em.anisotropy=MAXANISO;em.wrapS=em.wrapT=THREE.RepeatWrapping; return {map:m,emis:em};
 }
-const roofCapMat=new THREE.MeshStandardMaterial({color:0x1a1f27,roughness:0.8,metalness:0.3});
+const roofCapMat=new THREE.MeshStandardMaterial({color:0x2a2f37,roughness:0.8,metalness:0.3});
+// bright, varied toon palette so the skyline reads colourful & hand-painted
+const BUILDING_COLORS=[0x3fa9e0,0xff6a4a,0xffc23a,0x54cf8e,0xff8ac0,0x7a6cff,0x2ec4b6,0xffa24a,0xe8ecf2,0xef5da8,0x9ad24a,0x5a8fff];
+const ROOF_COLORS=[0xd94f3a,0x2f6fb0,0x2a9d6a,0xe0a52a,0x7a4fd0,0x38b0a6,0xc94a7a];
 function addBuilding(x,z,w,h,d){
   const tex=FACADE_POOL[(Math.random()*FACADE_POOL.length)|0];
-  // tile the facade so each floor/window keeps a constant real-world size regardless of building height
   const rx=Math.max(1,Math.round(w/6)), ry=Math.max(2,Math.round(h/5));
   const map=tex.map.clone(); map.needsUpdate=true; map.repeat.set(rx,ry);
   const emis=tex.emis.clone(); emis.needsUpdate=true; emis.repeat.set(rx,ry);
-  const mat=new THREE.MeshStandardMaterial({color:0x2a323c,roughness:0.55,metalness:0.35,map,emissive:0xffffff,emissiveMap:emis,emissiveIntensity:curWinEmis,envMapIntensity:1.0});
+  const col=BUILDING_COLORS[(Math.random()*BUILDING_COLORS.length)|0];
+  const mat=new THREE.MeshStandardMaterial({color:col,roughness:0.6,metalness:0.05,map,emissive:0xffffff,emissiveMap:emis,emissiveIntensity:curWinEmis,envMapIntensity:0.7});
   const m=new THREE.Mesh(roundedBox(w,h,d,0.1,2),mat); m.position.set(x,terrainH(x,z)+h/2-0.3,z); m.castShadow=true; m.receiveShadow=true;
   m.userData.emisBase=rand(0.7,1.3); m.material.emissiveIntensity=m.userData.emisBase*curWinEmis;
-  // roof parapet cap + occasional rooftop unit so towers aren't sliced boxes
-  const cap=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.9,d+0.5),roofCapMat); cap.position.y=h/2+0.1; cap.castShadow=true; m.add(cap);
-  if(h>22){ const ac=new THREE.Mesh(new THREE.BoxGeometry(w*0.34,1.8,d*0.34),roofCapMat); ac.position.set(rand(-w*0.18,w*0.18),h/2+1.3,rand(-d*0.18,d*0.18)); ac.castShadow=true; m.add(ac); }
+  // coloured roof band + parapet cap + rooftop details
+  const roofCol=ROOF_COLORS[(Math.random()*ROOF_COLORS.length)|0];
+  const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,1.1,d+0.3),new THREE.MeshStandardMaterial({color:roofCol,roughness:0.6})); band.position.y=h/2-0.4; band.castShadow=true; m.add(band);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.7,d+0.5),roofCapMat); cap.position.y=h/2+0.25; cap.castShadow=true; m.add(cap);
+  if(h>18){ const ac=new THREE.Mesh(new THREE.BoxGeometry(w*0.34,1.8,d*0.34),roofCapMat); ac.position.set(rand(-w*0.18,w*0.18),h/2+1.3,rand(-d*0.18,d*0.18)); ac.castShadow=true; m.add(ac);
+    const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,rand(2,4),4),roofCapMat); ant.position.set(rand(-w*0.2,w*0.2),h/2+2.4,rand(-d*0.2,d*0.2)); m.add(ant); }
   W().add(m); buildings.push(m);
   const r=Math.max(w,d)*0.5+1.2; colliders.push({x,z,r}); mapBuild.push({x,z});
 }
