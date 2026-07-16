@@ -4735,17 +4735,15 @@ const railMat=new THREE.MeshStandardMaterial({color:0xbcc2ca,metalness:0.75,roug
 const kerbMat=new THREE.MeshStandardMaterial({color:0x9aa0a8,roughness:0.9,metalness:0.05});
 // "constructed road": kerbs, metal guardrail + dense lamps along a straight boulevard
 function addBoulevard(ax){ // ax='z': road along z at x=0 ; ax='x': road along x at z=0
-  const half=9.4, L=330, step=8;
+  const half=9.4, L=330, step=16;
   for(const s of [-1,1]){
     for(let t=-L;t<=L;t+=step){
       const x=ax==='z'? s*half : t, z=ax==='z'? t : s*half, y=terrainH(x,z);
-      const post=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.9,0.16),railMat); post.position.set(x,y+0.45,z); W().add(post);
-      const rail=new THREE.Mesh(new THREE.BoxGeometry(ax==='z'?0.1:step,0.26,ax==='z'?step:0.1),railMat); rail.position.set(x,y+0.72,z); W().add(rail);
-      // kerb strip just inside the rail
-      const kx=ax==='z'? s*(half-0.8):x, kz=ax==='z'? z : s*(half-0.8);
-      const kerb=new THREE.Mesh(new THREE.BoxGeometry(ax==='z'?0.5:step,0.24,ax==='z'?step:0.5),kerbMat); kerb.position.set(kx,terrainH(kx,kz)+0.12,kz); kerb.receiveShadow=true; W().add(kerb);
+      // one merged rail-with-posts segment per step (no shadows -> cheap)
+      const rail=new THREE.Mesh(new THREE.BoxGeometry(ax==='z'?0.12:step,0.28,ax==='z'?step:0.12),railMat); rail.position.set(x,y+0.7,z); W().add(rail);
+      const post=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.85,0.16),railMat); post.position.set(x,y+0.42,z); W().add(post);
     }
-    for(let t=-L;t<=L;t+=24){ const x=ax==='z'? s*(half+2):t, z=ax==='z'? t : s*(half+2); addLamp(x,z); }
+    for(let t=-L;t<=L;t+=40){ const x=ax==='z'? s*(half+2):t, z=ax==='z'? t : s*(half+2); addLamp(x,z); }
   }
 }
 function addCoin(x,z){
@@ -4841,17 +4839,18 @@ function buildWorld(){
     c.position.set(Math.cos(a)*r,h/2-6,Math.sin(a)*r); c.rotation.y=rand(0,6.28); W().add(c);
     if(h>170){ const cap=new THREE.Mesh(new THREE.ConeGeometry(rad*0.42,h*0.3,6),snow); cap.position.set(Math.cos(a)*r,h*0.85-6,Math.sin(a)*r); W().add(cap); }
   }
-  // COINS along the rings and boulevards
-  for(let a=0;a<6.28;a+=0.32){ addCoin(Math.cos(a)*210,Math.sin(a)*210); }
-  for(let a=0;a<6.28;a+=0.28){ addCoin(Math.cos(a)*300,Math.sin(a)*300); }
-  for(let t=-320;t<=320;t+=30){ addCoin(0,t); addCoin(t,0); }
+  // COINS (built sparse; only made visible in the collection mode so they don't clutter the realistic scene)
+  for(let a=0;a<6.28;a+=0.34){ addCoin(Math.cos(a)*210,Math.sin(a)*210); }
+  for(let a=0;a<6.28;a+=0.3){ addCoin(Math.cos(a)*300,Math.sin(a)*300); }
+  for(let t=-320;t<=320;t+=34){ addCoin(0,t); addCoin(t,0); }
+  coins.forEach(m=>m.visible=false);
 }
 
 /* ================= TRAFFIC (AI cars driving the roads) ================= */
 const TRAFFIC_COLORS=[0x2fb6ff,0xffffff,0xff4d94,0x5ef0a2,0xffd24a,0x8a2fff,0x1a1d24];
 const traffic=[];
 function buildTraffic(){
-  const HI=CFG.quality==='high'; const N=HI?24:15;
+  const HI=CFG.quality==='high'; const N=HI?16:10;
   for(let i=0;i<N;i++){
     const c=buildCar({color:TRAFFIC_COLORS[i%TRAFFIC_COLORS.length], style:['coupe','hyper','muscle','suv'][i%4]});
     W().add(c); const e={mesh:c,x:0,z:0};
@@ -4977,7 +4976,7 @@ function startRun(){
   const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
   camera.position.set(car.x-fx*9.5, terrainH(car.x,car.z)+4.4, car.z-fz*9.5); G.camFov=60; camera.fov=60; camera.updateProjectionMatrix();
   if(G.mode==='coin'||G.mode==='race'){ delivery.active=false; if(deliveryMarker) deliveryMarker.visible=false; } else newDelivery();
-  coins.forEach(m=>{m.userData.active=true;m.visible=true;});
+  { const showCoins=(G.mode==='coin'); coins.forEach(m=>{m.userData.active=showCoins;m.visible=showCoins;}); }
   $('#menu').classList.add('hide'); $('#pause').classList.add('hide');
   $('#hud').classList.add('on'); if(IS_MOBILE)$('#touch').classList.add('on');
   initAudio(); audioResume(); if(Audio.master) Audio.master.gain.setTargetAtTime(0.5,Audio.ctx.currentTime,0.4);
